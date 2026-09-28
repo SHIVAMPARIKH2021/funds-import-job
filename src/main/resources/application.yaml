@@ -1,8 +1,11 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/funds
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: default
+    username: default
+    password: default
+
+  jdbc:
+    initialize-schema: always
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect

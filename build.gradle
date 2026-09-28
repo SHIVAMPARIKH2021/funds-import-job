@@ -1,8 +1,6 @@
-import org.springframework.boot.gradle.tasks.run.BootRun
-
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.1.1'
+    id 'org.springframework.boot' version '3.3.4'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -27,117 +25,11 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
-    // Correct testing dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.batch:spring-batch-test'
-
-    testCompileOnly 'org.projectlombok:lombok'
-    testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
-}
-
-// 1. Environment & Database Selection
-def targetEnv = project.findProperty('env') ?: System.getenv('APP_ENV') ?: 'local'
-def targetDb  = project.findProperty('db')  ?: 'funds' // -Pdb=funds or -Pdb=emfs
-
-// 2. Locate YAML configuration under src/main/resources/
-def yamlConfigFile = file("src/main/resources/application-${targetEnv}.yaml")
-if (!yamlConfigFile.exists()) {
-    yamlConfigFile = file("src/main/resources/application-${targetEnv}.yml")
-}
-
-static Map<String, String> parseSimpleYaml(File file) {
-    if (!file || !file.exists()) return [:]
-    Map<String, String> map = [:]
-    String currentSection = ''
-
-    for (String line : file.readLines()) {
-        String trimmed = line.trim()
-        if (trimmed.isEmpty() || trimmed.startsWith('#')) {
-            continue
-        }
-
-        if (!line.startsWith(' ') && !line.startsWith('\t') && trimmed.endsWith(':')) {
-            currentSection = trimmed[0..-2]
-        } else if (trimmed.contains(':')) {
-            String[] parts = trimmed.split(':', 2)
-            String key = parts[0].trim()
-            String value = parts[1].trim().replaceAll(/^["']|["']$/, '')
-            String fullKey = currentSection ? "${currentSection}.${key}" : key
-            map[fullKey] = value
-        }
-    }
-    return map
-}
-
-def yamlConfig = parseSimpleYaml(yamlConfigFile)
-
-// 3. Resolve Credentials from ~/.gradle/gradle.properties or Environment Variables
-def dbUser = project.findProperty("${targetDb}.${targetEnv}.user") ?:
-        project.findProperty('dbUsername') ?:
-                System.getenv('DB_USER') ?:
-                        'postgres'
-
-def dbPassword = project.findProperty("${targetDb}.${targetEnv}.password") ?:
-        project.findProperty('dbPassword') ?:
-                System.getenv('DB_PASSWORD') ?:
-                        'postgres'
-
-def dbHost    = yamlConfig['database.host'] ?: 'localhost'
-def dbPort    = yamlConfig['database.port'] ?: '5432'
-def dbName    = yamlConfig["database.${targetDb}.name"] ?: targetDb
-def dbSslMode = yamlConfig['database.sslmode'] ?: (targetEnv == 'dev' ? 'require' : 'prefer')
-
-def finalJdbcUrl = "jdbc:postgresql://${dbHost}:${dbPort}/${dbName}?sslmode=${dbSslMode}"
-
-// 4. Configure batchRun Task
-tasks.register('batchRun', BootRun) {
-    group = 'application'
-    description = 'Runs the Spring Batch application with resolved database configuration.'
-
-    // 1. Inherit the runtime classpath from the main source set
-    classpath = sourceSets.main.runtimeClasspath
-
-    // 2. Resolve the main class automatically from the Spring Boot extension or set explicitly
-    mainClass = tasks.named('bootRun').flatMap { it.mainClass } as Provider<? extends String>
-    // (Alternative if above doesn't resolve: mainClass = 'funds.Application')
-
-    // Set active profile via JVM system property (-Dspring.profiles.active=...)
-    systemProperty 'spring.profiles.active', targetEnv
-
-    // Database connection details
-    systemProperty 'spring.datasource.url', finalJdbcUrl
-    systemProperty 'spring.datasource.username', dbUser
-    systemProperty 'spring.datasource.password', dbPassword
-
-    // Pass Spring Batch job parameters: ./gradlew batchRun -PjobArgs="run.date=2026-09-20 target=funds"
-    if (project.hasProperty('jobArgs')) {
-        args = project.property('jobArgs').toString().split(' ') as List
-    }
-}
-
-// 5. Configure test Task
-tasks.named('test') {
-    systemProperty 'spring.profiles.active', targetEnv
-    systemProperty 'spring.datasource.url', finalJdbcUrl
-    systemProperty 'spring.datasource.username', dbUser
-    systemProperty 'spring.datasource.password', dbPassword
-}
-
-// 6. Diagnostics Task
-tasks.register('batchStatus') {
-    doLast {
-        println '----------------------------------------------'
-        println "Target DB            : ${targetDb}"
-        println "Target Environment   : ${targetEnv}"
-        println "Resolved Config File : ${yamlConfigFile.path} (exists: ${yamlConfigFile.exists()})"
-        println "Database JDBC URL    : ${finalJdbcUrl}"
-        println "Database User        : ${dbUser}"
-        println "Spring Profile       : ${targetEnv}"
-        println '----------------------------------------------'
-    }
 }
