@@ -4,11 +4,19 @@ spring:
     username: default
     password: default
 
-  jdbc:
-    initialize-schema: always
+  batch:
+    jdbc:
+      initialize-schema: never
+      table-prefix: batch.BATCH_
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  quarter: default
+  year: default
+  executor: default
+  benchmark:
+    regex: "\\s*\\(reflects no deduction for [^)]*\\)"

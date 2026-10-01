@@ -1,12 +1,19 @@
 package funds.reader;
 
+import funds.model.RawFundSource;
 import org.springframework.batch.item.ItemReader;
+import org.springframework.beans.factory.annotation.Autowired;
 
 public class FundsImportReader implements ItemReader {
 
+    @Autowired
+    private ComplianceRulesRepository complianceRulesRepository;
+
+    @Autowired
+
     @Override
-    public Object read() throws Exception {
-        // Implement your reading logic here
+    public RawFundSource read() throws Exception {
+
         return null;
     }
 }
