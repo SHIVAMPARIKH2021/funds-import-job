@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+           https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- ================================================================= -->
+    <!-- SELECT CLAUSES                                                    -->
+    <!-- ================================================================= -->
+    <bean id="selectRawFundSourceQuery" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+              select distinct
+                sub.adsh AS accessionNumber,
+                sub.filed as filingDate,
+                sub.cik,
+                ctm.symbol AS ticker,
+                ctm.class_id as classId,
+                td.series AS seriesId,
+                td.value AS strategyNarrative,
+                td.footnote as additionalStrategyNarrative
+            ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <!-- ================================================================= -->
+    <!-- FROM CLAUSES                                                      -->
+    <!-- ================================================================= -->
+    <bean id="fromRawFundSourceQuery" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+              from
+                sec_financials.submissions sub
+              join sec_financials.text_disclosures td
+                on sub.adsh = td.adsh
+              join sec_financials.company_tickers_mf ctm
+                on ctm.series_id  = td.series
+            ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <!-- ================================================================= -->
+    <!-- WHERE CLAUSE BASE & FRAGMENTS                                    -->
+    <!-- ================================================================= -->
+    <bean id="whereClause" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+            where
+            td."version" = :version
+            and td.tag = :tag
+         ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="getRawFundData" class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="selectClause"
+                  value="selectRawFundSourceQuery"/>
+        <property name="fromClause"
+                  value="fromRawFundSourceQuery"/>
+        <property name="whereClause"
+                  value="whereClause"/>
+    </bean>
+
+    <!-- ================================================================= -->
+    <!-- DML WRITE STATEMENTS (JDBC BATCH)                                 -->
+    <!-- ================================================================= -->
+    <bean id="upsertBenchmarkMasterQuery" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+                INSERT INTO analytics.benchmark_master (
+                    benchmark_id,
+                    benchmark_name,
+                    benchmark_provider,
+                    benchmark_type,
+                    created_by,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :benchmarkId,
+                    :benchmarkName,
+                    :benchmarkProvider,
+                    :benchmarkType,
+                    :createdBy,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (benchmark_name) DO UPDATE SET
+                    updated_at = CURRENT_TIMESTAMP
+            ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="upsertFundMasterQuery" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+                INSERT INTO analytics.fund_master (
+                    series_id,
+                    cik,
+                    fund_name,
+                    fund_family,
+                    primary_ticker,
+                    investment_objective,
+                    strategy_narrative,
+                    strategy_type,
+                    benchmark_id,
+                    benchmark_name,
+                    created_by,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    :seriesId,
+                    :cik,
+                    :fundName,
+                    :fundFamily,
+                    :primaryTicker,
+                    :investmentObjective,
+                    :strategyNarrative,
+                    :strategyType,
+                    :benchmarkId,
+                    :benchmarkName,
+                    :createdBy,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (series_id) DO UPDATE SET
+                    cik = EXCLUDED.cik,
+                    fund_name = EXCLUDED.fund_name,
+                    fund_family = EXCLUDED.fund_family,
+                    primary_ticker = EXCLUDED.primary_ticker,
+                    investment_objective = EXCLUDED.investment_objective,
+                    strategy_narrative = EXCLUDED.strategy_narrative,
+                    strategy_type = EXCLUDED.strategy_type,
+                    benchmark_id = EXCLUDED.benchmark_id,
+                    benchmark_name = EXCLUDED.benchmark_name,
+                    updated_at = CURRENT_TIMESTAMP
+            ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findActiveComplianceRules" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                select
+                    rule_id as ruleId,
+                    rule_name as ruleName,
+                    pattern,
+                    is_regex as isRegex,
+                    target_strategy as targetStrategy,
+                    priority,
+                    is_active as isActive
+                from analytics.compliance_rules
+                where is_active = true
+                order by
+                    priority;
+                ]]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findAllBenchmarksByTags" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                SELECT DISTINCT
+                    COALESCE(
+                    NULLIF(TRIM(pl.terse), ''),
+                    NULLIF(TRIM(pl.std), ''),
+                    NULLIF(TRIM(pl.verbose), ''),
+                    nf.measure
+                    ) AS raw_benchmark_name
+                FROM sec_financials.numeric_facts nf
+                  LEFT JOIN sec_financials.presentation_labels pl
+                  ON nf.adsh = pl.adsh
+                  AND (
+                  pl.tag = nf.measure
+                  OR pl.tag = CONCAT(nf.measure, 'Member')
+                  )
+                WHERE nf.tag IN (:benchmarkTags)
+                  AND (nf.class IS NULL OR TRIM(nf.class) = '')
+                  AND nf.measure IS NOT NULL
+                  AND TRIM(nf.measure) NOT IN (:excludedBenchmarks);
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="upsertBenchmarkMaster" class="java.lang.String">
+        <constructor-arg>
+                <value>
+                    <![CDATA[
+                    INSERT INTO analytics.benchmark_master (
+                        benchmark_name,
+                        benchmark_provider,
+                        benchmark_type,
+                        created_by,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        :benchmarkName,
+                        :benchmarkProvider,
+                        :benchmarkType,
+                        :createdBy,
+                        CURRENT_TIMESTAMP,
+                        CURRENT_TIMESTAMP
+                    )
+                    ON CONFLICT (benchmark_name) DO UPDATE SET
+                        updated_at = CURRENT_TIMESTAMP
+                    ]]>
+            </value>
+       </constructor-arg>
+    </bean>
+
+    <bean id="findBenchmarkByBenchmarkId" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                select
+                  bm.benchmark_id as benchmarkId,
+                  bm.benchmark_name as benchmarkName,
+                  bm.benchmark_provider as benchmarkProvider,
+                  bm.benchmark_type as benchmarkType
+                from analytics.benchmark_master bm
+                  join analytics.fund_master fm
+                  on fm.benchmark_id = bm.benchmark_id
+                where bm.benchmark_name = :benchmarkName
+                ]]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="fetchBenchmarkProviderRules" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                SELECT rule_id as ruleId,
+                  pattern,
+                  provider_name as providerName,
+                  default_type as defaultType,
+                  priority
+                FROM analytics.benchmark_provider_rules
+                WHERE is_active = TRUE
+                ORDER BY priority ASC, LENGTH(pattern) DESC
+                ]]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findFundBySeriesIdSql" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                select
+                  fm.series_id as seriesId,
+                  fm.cik as cik,
+                  fm.fund_name as fundName,
+                  fm.fund_family as fundFamily,
+                  fm.primary_ticker as primaryTicker,
+                  fm.investment_objective as investmentObjective,
+                  fm.strategy_narrative as strategyNarrative,
+                  fm.strategy_type as strategyType,
+                  bm.benchmark_id as benchmarkId,
+                  bm.benchmark_name as benchmarkName
+                from analytics.fund_master fm
+                    join analytics.benchmark_master bm
+                    on fm.benchmark_id = bm.benchmark_id
+                where fm.series_id = :seriesId
+                ]]]>
+            </value>
+        </constructor-arg>
+    </bean>
+</beans>
