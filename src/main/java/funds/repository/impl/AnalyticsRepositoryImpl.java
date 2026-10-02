@@ -56,6 +56,9 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     @Autowired
     private final String findFundBySeriesIdSql;
 
+    @Autowired
+    private final String upsertFundMasterQuery;
+
 
     public AnalyticsRepositoryImpl(JdbcTemplate jdbcTemplate,
                                    NamedParameterJdbcTemplate namedParameterJdbcTemplate,
@@ -66,7 +69,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
                                    String fetchBenchmarkProviderRules,
                                    String findFundBySeriesIdSql,
                                    String upsertBenchmarkMasterQuery,
-                                   String findAllBenchmark, String findAccessionNumberFromBenchmark, String findBenchmarksGroupedByAccession, String findFundBySeriesIdSql1) {
+                                   String findAllBenchmark, String findAccessionNumberFromBenchmark, String findBenchmarksGroupedByAccession, String findFundBySeriesIdSql1, String upsertFundMasterQuery) {
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
         this.findActiveComplianceRules = findActiveComplianceRules;
@@ -79,6 +82,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.findAccessionNumberFromBenchmark = findAccessionNumberFromBenchmark;
         this.findBenchmarksGroupedByAccession = findBenchmarksGroupedByAccession;
         this.findFundBySeriesIdSql = findFundBySeriesIdSql1;
+        this.upsertFundMasterQuery = upsertFundMasterQuery;
     }
 
     @Override
@@ -140,6 +144,16 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         namedParameterJdbcTemplate.batchUpdate(
                 upsertBenchmarkMasterQuery,
                 SqlParameterSourceUtils.createBatch(benchmarks)
+        );
+    }
+
+    public void saveAllFunds(List<? extends FundMaster> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        namedParameterJdbcTemplate.batchUpdate(
+                upsertFundMasterQuery,
+                SqlParameterSourceUtils.createBatch(items)
         );
     }
 

@@ -29,4 +29,6 @@ public interface AnalyticsRepository {
     Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccession();
 
     Map<String, String> findFundNamesByTag(String tag);
+
+    void saveAllFunds(List<? extends FundMaster> items);
 }
