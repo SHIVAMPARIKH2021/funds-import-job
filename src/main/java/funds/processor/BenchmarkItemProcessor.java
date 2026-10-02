@@ -107,6 +107,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         benchmarkMaster.setBenchmarkProvider(matchedProvider);
         benchmarkMaster.setBenchmarkType(matchedType);
         benchmarkMaster.setCreatedBy(this.executor);
+        benchmarkMaster.setAccessionNumber(benchmark.getAccessionNumber().trim());
 
         return benchmarkMaster;
     }

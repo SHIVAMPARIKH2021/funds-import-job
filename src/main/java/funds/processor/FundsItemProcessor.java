@@ -2,10 +2,7 @@ package funds.processor;
 
 import ch.qos.logback.core.util.StringUtil;
 import funds.constants.Tags;
-import funds.model.FundMaster;
-import funds.model.BenchmarkMaster;
-import funds.model.ComplianceRules;
-import funds.model.RawFundSource;
+import funds.model.*;
 import funds.repository.AnalyticsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.StepExecution;
@@ -21,7 +18,7 @@ import java.util.regex.Pattern;
 @Slf4j
 @Component
 @StepScope
-public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<FundMaster>> {
+public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImportPayload> {
 
     @Value("#{jobParameters['executor']}")
     private String executor;
@@ -58,6 +55,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<Fun
         }
 
         // 2. Preload grouped benchmarks by accession number (O(1) memory lookup)
+        this.benchmarksByAccessionMap.clear();
         this.benchmarksByAccessionMap = analyticsRepository.mapfindBenchmarksGroupedByAccession();
 
         this.fundNamesByTagMap.clear();
@@ -68,7 +66,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<Fun
     }
 
     @Override
-    public List<FundMaster> process(RawFundSource item) throws Exception {
+    public FundImportPayload process(RawFundSource item) throws Exception {
         if (item == null || StringUtil.isNullOrEmpty(item.getSeriesId())) {
             return null; // Skip invalid records
         }
@@ -78,31 +76,34 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<Fun
         }
 
         String classifiedStrategy = evaluateStrategy(item.getStrategyNarrative());
-        String accessionNumber = item.getAccessionNumber() != null ? item.getAccessionNumber().strip() : null;
 
-        List<BenchmarkMaster> matchedBenchmarks = accessionNumber != null
-                ? this.benchmarksByAccessionMap.getOrDefault(accessionNumber, Collections.emptyList())
-                : Collections.emptyList();
+        FundMaster fund = createBaseFundEntity(item, classifiedStrategy);
 
-        List<FundMaster> fundEntries = new ArrayList<>();
+        List<BenchmarkMaster> matchedBenchmarks = resolveBenchmarksForFund(item);
+        List<FundBenchmarkAssociation> associations = new ArrayList<>();
 
-        if (!matchedBenchmarks.isEmpty()) {
-            // Fan-out: Create one fund_master record per associated benchmark
+        if (matchedBenchmarks != null && !matchedBenchmarks.isEmpty()) {
+            boolean isFirst = true;
             for (BenchmarkMaster bm : matchedBenchmarks) {
-                FundMaster fund = createBaseFundEntity(item, classifiedStrategy);
-                fund.setBenchmarkId(bm.getBenchmarkId()); // java.util.UUID
-                fund.setBenchmarkName(bm.getBenchmarkName());
-                fundEntries.add(fund);
+                // Set the first benchmark as primary on fund_master
+                if (isFirst) {
+                    fund.setBenchmarkId(bm.getBenchmarkId());
+                    fund.setBenchmarkName(bm.getBenchmarkName());
+                }
+
+                // Add to bridge associations
+                associations.add(new FundBenchmarkAssociation(
+                        item.getSeriesId(),
+                        bm.getBenchmarkId(),
+                        bm.getBenchmarkName(),
+                        isFirst,
+                        item.getAccessionNumber()
+                ));
+                isFirst = false;
             }
-        } else {
-            // No comparative benchmark declared for this accession filing: emit single entry with null benchmark
-            FundMaster fund = createBaseFundEntity(item, classifiedStrategy);
-            fund.setBenchmarkId(null);
-            fund.setBenchmarkName(null);
-            fundEntries.add(fund);
         }
 
-        return fundEntries;
+        return new FundImportPayload(fund, associations);
     }
 
     private FundMaster createBaseFundEntity(RawFundSource item, String classifiedStrategy) {
@@ -117,7 +118,9 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<Fun
         fund.setStrategyNarrative(item.getStrategyNarrative());
         fund.setStrategyType(classifiedStrategy);
         fund.setCreatedBy(this.executor);
-        fund.setUpdatedBy(this.executor);
+        fund.setReportingCadence("ANNUAL");
+        fund.setHasDailyPricing(Boolean.TRUE);
+        fund.setHasQuarterlyHoldings(Boolean.TRUE);
         return fund;
     }
 
@@ -142,5 +145,13 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<Fun
         }
 
         return UNKNOWN_TYPE;
+    }
+
+    private List<BenchmarkMaster> resolveBenchmarksForFund(RawFundSource item) {
+        String accessionNumber = item.getAccessionNumber() != null ? item.getAccessionNumber().trim() : null;
+
+        return accessionNumber != null
+                ? this.benchmarksByAccessionMap.getOrDefault(accessionNumber, Collections.emptyList())
+                : Collections.emptyList();
     }
 }

@@ -44,8 +44,9 @@ public class FundsImportReader implements ItemReader<RawFundSource> {
                     calculateQuarterDateRange(Integer.parseInt(year),
                             Integer.parseInt(quarter)).get("minDate"),
                     calculateQuarterDateRange(Integer.parseInt(year),
-                            Integer.parseInt(quarter)).get("maxDate"));
-            this.fundIterator = funds != null ? funds.iterator() : Collections.emptyIterator();
+                            Integer.parseInt(quarter)).get("maxDate"))
+                    .stream().distinct().toList();
+            this.fundIterator = funds.iterator();
         }
         return this.fundIterator.hasNext() ? this.fundIterator.next() : null;
     }

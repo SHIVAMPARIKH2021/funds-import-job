@@ -1,16 +1,19 @@
 package funds.repository.impl;
 
-import ch.qos.logback.core.util.StringUtil;
-import funds.model.*;
+import funds.model.FundMaster;
+import funds.model.FundBenchmarkAssociation;
+import funds.model.BenchmarkMaster;
+import funds.model.BenchmarkCandidate;
+import funds.model.ComplianceRules;
+import funds.model.RawFundSource;
+import funds.model.RawBenchmarkSource;
 import funds.repository.AnalyticsRepository;
-import org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.jdbc.core.namedparam.SqlParameterSourceUtils;
 import org.springframework.stereotype.Repository;
 
@@ -20,7 +23,6 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.UUID;
-import java.util.Optional;
 
 @Repository
 public class AnalyticsRepositoryImpl implements AnalyticsRepository {
@@ -33,11 +35,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     private final String findAllBenchmarksByTags;
     private final String fetchBenchmarkProviderRules;
     private final String upsertBenchmarkMasterQuery;
-    private final String findAllBenchmark;
     private final String findAccessionNumberFromBenchmark;
     private final String findBenchmarksGroupedByAccession;
     private final String upsertFundMasterQuery;
     private final String findFundNamesByTagSql;
+    private final String upsertFundBenchmarkAssociationQuery;
 
 
     public AnalyticsRepositoryImpl(
@@ -49,11 +51,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
             @Qualifier("findAllBenchmarksByTags") String findAllBenchmarksByTags,
             @Qualifier("fetchBenchmarkProviderRules") String fetchBenchmarkProviderRules,
             @Qualifier("upsertBenchmarkMasterQuery") String upsertBenchmarkMasterQuery,
-            @Qualifier("upsertBenchmarkMaster") String findAllBenchmark,
             @Qualifier("findAccessionNumberFromBenchmark") String findAccessionNumberFromBenchmark,
             @Qualifier("findBenchmarksGroupedByAccession") String findBenchmarksGroupedByAccession,
             @Qualifier("upsertFundMasterQuery") String upsertFundMasterQuery,
-            @Qualifier("findFundNamesByTagSql") String findFundNamesByTagSql) {
+            @Qualifier("findFundNamesByTagSql") String findFundNamesByTagSql,
+            @Qualifier("upsertFundBenchmarkAssociationQuery") String upsertFundBenchmarkAssociationQuery) {
 
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
@@ -63,30 +65,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.findAllBenchmarksByTags = findAllBenchmarksByTags;
         this.fetchBenchmarkProviderRules = fetchBenchmarkProviderRules;
         this.upsertBenchmarkMasterQuery = upsertBenchmarkMasterQuery;
-        this.findAllBenchmark = findAllBenchmark;
         this.findAccessionNumberFromBenchmark = findAccessionNumberFromBenchmark;
         this.findBenchmarksGroupedByAccession = findBenchmarksGroupedByAccession;
         this.upsertFundMasterQuery = upsertFundMasterQuery;
         this.findFundNamesByTagSql = findFundNamesByTagSql;
-    }
-
-    @Override
-    public Optional<BenchmarkMaster> findBenchMarkByBenchmarkName(String benchmarkId) {
-        if (StringUtil.isNullOrEmpty(benchmarkId)) {
-            return Optional.empty();
-        }
-
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("benchmarkId", benchmarkId.trim());
-
-        // query(...) avoiding EmptyResultDataAccessException
-        List<BenchmarkMaster> results = namedParameterJdbcTemplate.query(
-                findBenchmarkByName,
-                params,
-                new BeanPropertyRowMapper<>(BenchmarkMaster.class)
-        );
-
-        return results.stream().findFirst();
+        this.upsertFundBenchmarkAssociationQuery = upsertFundBenchmarkAssociationQuery;
     }
 
     @Override
@@ -116,10 +99,6 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         return jdbcTemplate.query(fetchBenchmarkProviderRules, new BeanPropertyRowMapper<>(BenchmarkCandidate.class));
     }
 
-    @Override
-    public void saveBenchmark(String benchmarkName, String benchmarkProvider, String benchmarkType, String createdBy) {
-        jdbcTemplate.update(upsertBenchmarkMasterQuery, benchmarkName, benchmarkProvider, benchmarkType, createdBy);
-    }
 
     @Override
     public void saveAllBenchmarks(List<? extends BenchmarkMaster> benchmarks) {
@@ -142,25 +121,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         );
     }
 
-    public List<BenchmarkMaster> findBenchmarkMasterByAccessionNumbers(List<String> accessionNumbers) {
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("accessionNumbers", accessionNumbers);
-        return jdbcTemplate.query(findAllBenchmark, new BeanPropertyRowMapper<>(BenchmarkMaster.class));
-    }
-
-    @Override
-    public List<String> findAccessionNumberFromBenchmark() {
-        return namedParameterJdbcTemplate.query(
-                findAccessionNumberFromBenchmark,
-                new BeanPropertyRowMapper<>(String.class)
-        );
-    }
-
     @Override
     public Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccession() {
         Map<String, List<BenchmarkMaster>> map = new HashMap<>();
         namedParameterJdbcTemplate.query(findBenchmarksGroupedByAccession, rs -> {
-            String accession = rs.getString("accessionNumber").strip();
+            String accession = rs.getString("accessionNumber").trim();
 
             BenchmarkMaster bm = new BenchmarkMaster();
             bm.setAccessionNumber(accession);
@@ -186,5 +151,14 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         });
 
         return fundNamesMap;
+    }
+
+    @Override
+    public void upsertFundBenchmarkAssociations(List<FundBenchmarkAssociation> associations) {
+        if (associations == null || associations.isEmpty()) {
+            return;
+        }
+        SqlParameterSource[] batch = SqlParameterSourceUtils.createBatch(associations.toArray());
+        namedParameterJdbcTemplate.batchUpdate(this.upsertFundBenchmarkAssociationQuery, batch);
     }
 }
