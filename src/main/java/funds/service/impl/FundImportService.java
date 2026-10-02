@@ -29,12 +29,6 @@ public class FundImportService implements JobService {
     @Value("executor")
     private String executor;
 
-    @Value("series")
-    private String seriesId;
-
-    @Value("refresh")
-    private String forceFullRefresh;
-
     @Value("dryrun")
     private String dryRun;
 
@@ -52,8 +46,6 @@ public class FundImportService implements JobService {
         this.year = year;
         this.quarter = quarter;
         this.executor = executor;
-        this.seriesId = seriesId;
-        this.forceFullRefresh = forceFullRefresh;
         this.dryRun = dryRun;
     }
 
@@ -71,10 +63,8 @@ public class FundImportService implements JobService {
                 .addString("quarter", quarter)
                 .addString("year", year)
                 .addLong("runId", System.currentTimeMillis())
-                //Optional parameters
-                .addString("seriesId", seriesId)
-                .addString("forceFullRefresh", forceFullRefresh)
-                .addString("dryRun", dryRun)
+                //Optional parameter
+                .addString("dryrun", dryRun)
                 .toJobParameters();
 
         return jobLauncher.run(fundsImportJob, params);
