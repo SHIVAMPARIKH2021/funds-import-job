@@ -3,12 +3,16 @@ package funds.repository.impl;
 import ch.qos.logback.core.util.StringUtil;
 import funds.model.*;
 import funds.repository.AnalyticsRepository;
+import org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSourceUtils;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -18,58 +22,39 @@ import java.util.ArrayList;
 import java.util.UUID;
 import java.util.Optional;
 
+@Repository
 public class AnalyticsRepositoryImpl implements AnalyticsRepository {
 
-    @Autowired
     private JdbcTemplate jdbcTemplate;
-
-    @Autowired
-    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;;
-
-    @Autowired
+    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final String findActiveComplianceRules;
-
-    @Autowired
     private final String getRawFundData;
-
-    @Autowired
     private final String findBenchmarkByName;
-
-    @Autowired
     private final String findAllBenchmarksByTags;
-
-    @Autowired
     private final String fetchBenchmarkProviderRules;
-
-    @Autowired
     private final String upsertBenchmarkMasterQuery;
-
-    @Autowired
     private final String findAllBenchmark;
-
-    @Autowired
     private final String findAccessionNumberFromBenchmark;
-
-    @Autowired
     private final String findBenchmarksGroupedByAccession;
-
-    @Autowired
-    private final String findFundBySeriesIdSql;
-
-    @Autowired
     private final String upsertFundMasterQuery;
+    private final String findFundNamesByTagSql;
 
 
-    public AnalyticsRepositoryImpl(JdbcTemplate jdbcTemplate,
-                                   NamedParameterJdbcTemplate namedParameterJdbcTemplate,
-                                   String findActiveComplianceRules,
-                                   String getRawFundData,
-                                   String findBenchmarkByName,
-                                   String findAllBenchmarksByTags,
-                                   String fetchBenchmarkProviderRules,
-                                   String findFundBySeriesIdSql,
-                                   String upsertBenchmarkMasterQuery,
-                                   String findAllBenchmark, String findAccessionNumberFromBenchmark, String findBenchmarksGroupedByAccession, String findFundBySeriesIdSql1, String upsertFundMasterQuery) {
+    public AnalyticsRepositoryImpl(
+            JdbcTemplate jdbcTemplate,
+            NamedParameterJdbcTemplate namedParameterJdbcTemplate,
+            @Qualifier("findActiveComplianceRules") String findActiveComplianceRules,
+            @Qualifier("getRawFundData") String getRawFundData,
+            @Qualifier("findBenchmarkByAccessionNumbers") String findBenchmarkByName,
+            @Qualifier("findAllBenchmarksByTags") String findAllBenchmarksByTags,
+            @Qualifier("fetchBenchmarkProviderRules") String fetchBenchmarkProviderRules,
+            @Qualifier("upsertBenchmarkMasterQuery") String upsertBenchmarkMasterQuery,
+            @Qualifier("upsertBenchmarkMaster") String findAllBenchmark,
+            @Qualifier("findAccessionNumberFromBenchmark") String findAccessionNumberFromBenchmark,
+            @Qualifier("findBenchmarksGroupedByAccession") String findBenchmarksGroupedByAccession,
+            @Qualifier("upsertFundMasterQuery") String upsertFundMasterQuery,
+            @Qualifier("findFundNamesByTagSql") String findFundNamesByTagSql) {
+
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
         this.findActiveComplianceRules = findActiveComplianceRules;
@@ -81,8 +66,8 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.findAllBenchmark = findAllBenchmark;
         this.findAccessionNumberFromBenchmark = findAccessionNumberFromBenchmark;
         this.findBenchmarksGroupedByAccession = findBenchmarksGroupedByAccession;
-        this.findFundBySeriesIdSql = findFundBySeriesIdSql1;
         this.upsertFundMasterQuery = upsertFundMasterQuery;
+        this.findFundNamesByTagSql = findFundNamesByTagSql;
     }
 
     @Override
@@ -106,7 +91,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
 
     @Override
     public List<ComplianceRules> findByIsActiveTrueOrderByPriorityAsc() {
-        return jdbcTemplate.query(findActiveComplianceRules, new BeanPropertyRowMapper<>());
+        return jdbcTemplate.query(findActiveComplianceRules, new BeanPropertyRowMapper<>(ComplianceRules.class));
     }
 
     @Override
@@ -194,7 +179,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("tag", tag);
 
-        namedParameterJdbcTemplate.query(findFundBySeriesIdSql, params, rs -> {
+        namedParameterJdbcTemplate.query(findFundNamesByTagSql, params, rs -> {
             String seriesId = rs.getString("seriesId");
             String fundName = rs.getString("fundName");
             fundNamesMap.put(seriesId, fundName);

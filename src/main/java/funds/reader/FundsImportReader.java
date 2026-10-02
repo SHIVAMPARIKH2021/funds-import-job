@@ -3,9 +3,11 @@ package funds.reader;
 import funds.constants.Tags;
 import funds.model.RawFundSource;
 import funds.repository.AnalyticsRepository;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -14,15 +16,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-public class FundsImportReader implements ItemReader {
+@Component
+@StepScope
+public class FundsImportReader implements ItemReader<RawFundSource> {
 
     @Autowired
     private final AnalyticsRepository analyticsRepository;
 
-    @Value("#jobParameters['year']")
+    @Value("#{jobParameters['year']}")
     private String year;
 
-    @Value("#jobParameters['quarter']")
+    @Value("#{jobParameters['quarter']}")
     private String quarter;
 
     private Iterator<RawFundSource> fundIterator;
@@ -37,10 +41,10 @@ public class FundsImportReader implements ItemReader {
             // Fetch the fund data based on version and tag
             List<RawFundSource> funds = analyticsRepository.findRawFundsForQuarter(
                     Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag(),
-                    calculateQuarterDateRange(Integer.getInteger(year),
-                            Integer.getInteger(quarter)).get("minDate"),
-                    calculateQuarterDateRange(Integer.getInteger(year),
-                            Integer.getInteger(quarter)).get("maxDate"));
+                    calculateQuarterDateRange(Integer.parseInt(year),
+                            Integer.parseInt(quarter)).get("minDate"),
+                    calculateQuarterDateRange(Integer.parseInt(year),
+                            Integer.parseInt(quarter)).get("maxDate"));
             this.fundIterator = funds != null ? funds.iterator() : Collections.emptyIterator();
         }
         return this.fundIterator.hasNext() ? this.fundIterator.next() : null;

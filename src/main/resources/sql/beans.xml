@@ -9,7 +9,7 @@
     <!-- ================================================================= -->
     <bean id="selectRawFundSourceQuery" class="java.lang.String">
         <constructor-arg>
-            <value><![CDATA[
+            <value>
               select distinct
                 sub.adsh AS accessionNumber,
                 sub.filed as filingDate,
@@ -20,7 +20,7 @@
                 td.series AS seriesId,
                 td.value AS strategyNarrative,
                 td.footnote as additionalStrategyNarrative
-            ]]></value>
+            </value>
         </constructor-arg>
     </bean>
 
@@ -55,14 +55,8 @@
         </constructor-arg>
     </bean>
 
-    <bean id="getRawFundData" class="org.springframework.batch.item.database.support.SqlPagingQueryProviderFactoryBean">
-        <property name="dataSource" ref="dataSource"/>
-        <property name="selectClause"
-                  value="selectRawFundSourceQuery"/>
-        <property name="fromClause"
-                  value="fromRawFundSourceQuery"/>
-        <property name="whereClause"
-                  value="whereClause"/>
+    <bean id="getRawFundData" class="java.lang.String">
+        <constructor-arg value="#{selectRawFundSourceQuery + ' ' + fromRawFundSourceQuery + ' ' + whereClause}"/>
     </bean>
 
     <!-- ================================================================= -->
@@ -159,7 +153,7 @@
                 where is_active = true
                 order by
                     priority;
-                ]]]>
+                ]]>
             </value>
         </constructor-arg>
     </bean>
@@ -167,6 +161,7 @@
     <bean id="findAllBenchmarksByTags" class="java.lang.String">
         <constructor-arg>
             <value>
+                <![CDATA[
                 SELECT DISTINCT
                     COALESCE(
                     NULLIF(TRIM(pl.terse), ''),
@@ -186,6 +181,7 @@
                   AND (nf.class IS NULL OR TRIM(nf.class) = '')
                   AND nf.measure IS NOT NULL
                   AND TRIM(nf.measure) NOT IN (:excludedBenchmarks);
+                ]]>
             </value>
         </constructor-arg>
     </bean>
@@ -227,7 +223,7 @@
                   benchmark_type AS benchmarkType
                 FROM analytics.benchmark_master
                 WHERE accession_number IN(:accessionNumbers)
-                ]]]>
+                ]]>
             </value>
         </constructor-arg>
     </bean>
@@ -244,7 +240,7 @@
                 FROM analytics.benchmark_master
                 WHERE accession_number IS NOT NULL
                 ORDER BY accession_number, benchmark_name
-                ]]]>
+                ]]>
             </value>
         </constructor-arg>
     </bean>
@@ -256,7 +252,7 @@
                 SELECT DISTINCT
                   accession_number AS accessionNumber
                 FROM analytics.benchmark_master;
-                ]]]>
+                ]]>
             </value>
         </constructor-arg>
     </bean>
@@ -273,7 +269,7 @@
                 FROM analytics.benchmark_provider_rules
                 WHERE is_active = TRUE
                 ORDER BY priority ASC, LENGTH(pattern) DESC
-                ]]]>
+                ]]>
             </value>
         </constructor-arg>
     </bean>
@@ -297,7 +293,7 @@
                     join analytics.benchmark_master bm
                     on fm.benchmark_id = bm.benchmark_id
                 where fm.series_id = :seriesId
-                ]]]>
+                ]]>
             </value>
         </constructor-arg>
     </bean>
@@ -320,7 +316,7 @@
                 WHERE td.tag = :tag
                   AND td.series IS NOT NULL
                   AND COALESCE(pl.terse, pl.std, pl.verbose) IS NOT NULL;
-                ]]]>
+                ]]>
             </value>
         </constructor-arg>
     </bean>

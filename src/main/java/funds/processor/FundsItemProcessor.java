@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 @StepScope
 public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<FundMaster>> {
 
-    @Value("#{jobParameters['executor'] ?: 'SYSTEM'}")
+    @Value("#{jobParameters['executor']}")
     private String executor;
 
     @Value("#{jobParameters['dryrun'] ?: 'false'}")

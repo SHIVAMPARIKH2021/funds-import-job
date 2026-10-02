@@ -33,8 +33,8 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
 
     public BenchmarkItemProcessor(
             AnalyticsRepository analyticsRepository,
-            @Value("${benchmark.regex") String benchmarkRegex,
-            @Value("#{jobParameters['executor'] ?: 'SYSTEM'}") String executor
+            @Value("${benchmark.regex}") String benchmarkRegex,
+            @Value("#{jobParameters['executor']}") String executor
     ) {
         this.analyticsRepository = analyticsRepository;
         this.benchmarkRegex = benchmarkRegex;

@@ -3,6 +3,8 @@ package funds.configuration;
 import funds.model.FundMaster;
 import funds.model.RawFundSource;
 import funds.processor.FundsItemProcessor;
+import funds.reader.FundsImportReader;
+import funds.writer.FundsItemWriter;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
@@ -43,13 +45,12 @@ public class FundsImportJobConfig {
     public Step fundsImportStep(
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
-            @Qualifier("fundsImportReader")ItemReader<RawFundSource> fundsImportReader,
-            @Qualifier("fundsItemProcessor")ItemProcessor<? super RawFundSource,
-                    ? extends FundMaster> fundsItemProcessor,
-            @Qualifier("fundsItemWriter")ItemWriter<FundMaster> fundsItemWriter
+            FundsImportReader fundsImportReader,
+            FundsItemProcessor fundsItemProcessor,
+            FundsItemWriter fundsItemWriter
     ) {
         return new StepBuilder("fundsImportStep", jobRepository)
-                .<RawFundSource, FundMaster>chunk(CHUNK_SIZE, transactionManager)
+                .<RawFundSource, List<FundMaster>>chunk(CHUNK_SIZE, transactionManager)
                 .reader(fundsImportReader)
                 .processor(fundsItemProcessor)
                 .writer(fundsItemWriter)

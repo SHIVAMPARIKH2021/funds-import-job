@@ -15,39 +15,23 @@ import org.springframework.stereotype.Service;
 @Service("fundImportService")
 public class FundImportService implements JobService {
 
-    private final JobLauncher jobLauncher;
+    @Autowired
+    private JobLauncher jobLauncher;
 
     @Autowired
     private Job fundsImportJob;
 
-    @Value("quarter")
+    @Value("${quarter:default}")
     private String quarter;
 
-    @Value("year")
+    @Value("${year:default}")
     private String year;
 
-    @Value("executor")
+    @Value("${executor:default}")
     private String executor;
 
-    @Value("dryrun")
+    @Value("${dryrun:default}")
     private String dryRun;
-
-    public FundImportService(JobLauncher jobLauncher,
-                             Job fundsImportJob,
-                             String quarter,
-                             String year,
-                             String executor,
-                             String seriesId,
-                             String forceFullRefresh,
-                             String dryRun
-                             ) {
-        this.jobLauncher = jobLauncher;
-        this.fundsImportJob = fundsImportJob;
-        this.year = year;
-        this.quarter = quarter;
-        this.executor = executor;
-        this.dryRun = dryRun;
-    }
 
     @Override
     public JobExecution processJob() throws InvalidParameterException, JobInstanceAlreadyCompleteException,
