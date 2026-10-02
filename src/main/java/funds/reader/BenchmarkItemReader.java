@@ -1,6 +1,7 @@
 package funds.reader;
 
 import funds.constants.Tags;
+import funds.model.RawBenchmarkSource;
 import funds.repository.AnalyticsRepository;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ItemReader;
@@ -11,10 +12,10 @@ import java.util.List;
 
 @Component
 @StepScope
-public class BenchmarkItemReader implements ItemReader<String> {
+public class BenchmarkItemReader implements ItemReader<RawBenchmarkSource> {
 
     private final AnalyticsRepository analyticsRepository;
-    private Iterator<String> benchmarkIterator;
+    private Iterator<RawBenchmarkSource> benchmarkIterator;
 
     private static final List<String> INCLUDED_TAGS = List.of(
             Tags.AVERAGE_ANNUAL_RETURN_ONE_YEAR.getTag(),
@@ -39,13 +40,13 @@ public class BenchmarkItemReader implements ItemReader<String> {
     }
 
     @Override
-    public String read() {
+    public RawBenchmarkSource read() {
         if (benchmarkIterator == null) {
-            List<String> benchmarks = analyticsRepository.findAllBenchmarksByTags(
+            List<RawBenchmarkSource> benchmarks = analyticsRepository.findAllBenchmarksByTags(
                     INCLUDED_TAGS,
                     EXCLUDED_TAGS
             );
-            this.benchmarkIterator = benchmarks != null ? benchmarks.iterator() : List.<String>of().iterator();
+            this.benchmarkIterator = benchmarks != null ? benchmarks.iterator() : List.<RawBenchmarkSource>of().iterator();
         }
 
         // Returns one item at a time; returns null when exhausted to signal step completion

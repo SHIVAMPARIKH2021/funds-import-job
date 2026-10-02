@@ -41,9 +41,9 @@ public class FundsImportJobConfig {
     public Step fundsImportStep(
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
-            ItemReader<RawFundSource> fundsImportReader,
-            FundsItemProcessor fundsItemProcessor,
-            ItemWriter<FundMaster> fundsItemWriter
+            @Qualifier("fundsImportReader")ItemReader<RawFundSource> fundsImportReader,
+            @Qualifier("fundsItemProcessor")FundsItemProcessor fundsItemProcessor,
+            @Qualifier("fundsItemWriter")ItemWriter<FundMaster> fundsItemWriter
     ) {
         return new StepBuilder("fundsImportStep", jobRepository)
                 .<RawFundSource, FundMaster>chunk(CHUNK_SIZE, transactionManager)

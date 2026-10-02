@@ -8,8 +8,14 @@ import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SqlParameterSourceUtils;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.UUID;
 import java.util.Optional;
 
 public class AnalyticsRepositoryImpl implements AnalyticsRepository {
@@ -36,7 +42,20 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     private final String fetchBenchmarkProviderRules;
 
     @Autowired
+    private final String upsertBenchmarkMasterQuery;
+
+    @Autowired
+    private final String findAllBenchmark;
+
+    @Autowired
+    private final String findAccessionNumberFromBenchmark;
+
+    @Autowired
+    private final String findBenchmarksGroupedByAccession;
+
+    @Autowired
     private final String findFundBySeriesIdSql;
+
 
     public AnalyticsRepositoryImpl(JdbcTemplate jdbcTemplate,
                                    NamedParameterJdbcTemplate namedParameterJdbcTemplate,
@@ -45,7 +64,9 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
                                    String findBenchmarkByName,
                                    String findAllBenchmarksByTags,
                                    String fetchBenchmarkProviderRules,
-                                   String findFundBySeriesIdSql) {
+                                   String findFundBySeriesIdSql,
+                                   String upsertBenchmarkMasterQuery,
+                                   String findAllBenchmark, String findAccessionNumberFromBenchmark, String findBenchmarksGroupedByAccession, String findFundBySeriesIdSql1) {
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
         this.findActiveComplianceRules = findActiveComplianceRules;
@@ -53,7 +74,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.findBenchmarkByName = findBenchmarkByName;
         this.findAllBenchmarksByTags = findAllBenchmarksByTags;
         this.fetchBenchmarkProviderRules = fetchBenchmarkProviderRules;
-        this.findFundBySeriesIdSql = findFundBySeriesIdSql;
+        this.upsertBenchmarkMasterQuery = upsertBenchmarkMasterQuery;
+        this.findAllBenchmark = findAllBenchmark;
+        this.findAccessionNumberFromBenchmark = findAccessionNumberFromBenchmark;
+        this.findBenchmarksGroupedByAccession = findBenchmarksGroupedByAccession;
+        this.findFundBySeriesIdSql = findFundBySeriesIdSql1;
     }
 
     @Override
@@ -81,41 +106,86 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     }
 
     @Override
-    public Optional<FundMaster> findBySeriesId(String seriesId) {
-        if (seriesId == null || seriesId.isBlank()) {
-            return Optional.empty();
-        }
-
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("seriesId", seriesId.trim());
-
-        List<FundMaster> results = namedParameterJdbcTemplate.query(
-                findFundBySeriesIdSql,
-                params,
-                new BeanPropertyRowMapper<>(FundMaster.class)
-        );
-
-        return results.stream().findFirst();
-    }
-
-    @Override
-    public List<RawFundSource> findRawFundsByVersionAndTag(String version, String tag) {
+    public List<RawFundSource> findRawFundsForQuarter(String tag, LocalDate minDate, LocalDate maxDate) {
         MapSqlParameterSource MapSqlParameterSource = new MapSqlParameterSource()
-                .addValue("version", version)
-                .addValue("tag", tag);
+                .addValue("tag", tag)
+                .addValue("minDate", minDate)
+                .addValue("maxDate", maxDate);
         return namedParameterJdbcTemplate.query(getRawFundData, MapSqlParameterSource, new BeanPropertyRowMapper<>(RawFundSource.class));
     }
 
     @Override
-    public List<String> findAllBenchmarksByTags(List<String> includedTags, List<String> excludedTags) {
+    public List<RawBenchmarkSource> findAllBenchmarksByTags(List<String> includedTags, List<String> excludedTags) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("benchmarkTags", includedTags)
                 .addValue("excludedBenchmarks", excludedTags);
-        return namedParameterJdbcTemplate.query(findAllBenchmarksByTags, params, new BeanPropertyRowMapper<>(String.class));
+        return namedParameterJdbcTemplate.query(findAllBenchmarksByTags, params, new BeanPropertyRowMapper<>(RawBenchmarkSource.class));
     }
 
     @Override
-    public List<BenchmarkCandidate> findAllBenchmarks() {
+    public List<BenchmarkCandidate> fetchBenchmarkProviderRules() {
         return jdbcTemplate.query(fetchBenchmarkProviderRules, new BeanPropertyRowMapper<>(BenchmarkCandidate.class));
+    }
+
+    @Override
+    public void saveBenchmark(String benchmarkName, String benchmarkProvider, String benchmarkType, String createdBy) {
+        jdbcTemplate.update(upsertBenchmarkMasterQuery, benchmarkName, benchmarkProvider, benchmarkType, createdBy);
+    }
+
+    @Override
+    public void saveAllBenchmarks(List<? extends BenchmarkMaster> benchmarks) {
+        if (benchmarks == null || benchmarks.isEmpty()) {
+            return;
+        }
+        namedParameterJdbcTemplate.batchUpdate(
+                upsertBenchmarkMasterQuery,
+                SqlParameterSourceUtils.createBatch(benchmarks)
+        );
+    }
+
+    public List<BenchmarkMaster> findBenchmarkMasterByAccessionNumbers(List<String> accessionNumbers) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("accessionNumbers", accessionNumbers);
+        return jdbcTemplate.query(findAllBenchmark, new BeanPropertyRowMapper<>(BenchmarkMaster.class));
+    }
+
+    @Override
+    public List<String> findAccessionNumberFromBenchmark() {
+        return namedParameterJdbcTemplate.query(
+                findAccessionNumberFromBenchmark,
+                new BeanPropertyRowMapper<>(String.class)
+        );
+    }
+
+    @Override
+    public Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccession() {
+        Map<String, List<BenchmarkMaster>> map = new HashMap<>();
+        namedParameterJdbcTemplate.query(findBenchmarksGroupedByAccession, rs -> {
+            String accession = rs.getString("accessionNumber").strip();
+
+            BenchmarkMaster bm = new BenchmarkMaster();
+            bm.setAccessionNumber(accession);
+            bm.setBenchmarkId(rs.getObject("benchmarkId", UUID.class)); // Native UUID
+            bm.setBenchmarkName(rs.getString("benchmarkName"));
+            bm.setBenchmarkType(rs.getString("benchmarkType"));
+
+            map.computeIfAbsent(accession, k -> new ArrayList<>()).add(bm);
+        });
+        return map;
+    }
+
+    @Override
+    public Map<String, String> findFundNamesByTag(String tag) {
+        Map<String, String> fundNamesMap = new HashMap<>();
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("tag", tag);
+
+        namedParameterJdbcTemplate.query(findFundBySeriesIdSql, params, rs -> {
+            String seriesId = rs.getString("seriesId");
+            String fundName = rs.getString("fundName");
+            fundNamesMap.put(seriesId, fundName);
+        });
+
+        return fundNamesMap;
     }
 }

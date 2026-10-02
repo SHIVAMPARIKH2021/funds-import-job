@@ -16,15 +16,17 @@ public class RawFundSource extends BaseModel {
         private String seriesId;
         private Integer cik;
         private String accessionNumber;
-        LocalDate filingDate;
+        private LocalDate filingDate;
 
         // Core Fund Profile & Metadata
         private String ticker;
         private String classId;
+        private String fundFamily;
 
         // Narrative Blocks (Target of Regex & Compliance Classification)
         private String strategyNarrative;
         private String additonalStrategyNarrative;
+        private String benchmarkName;
 
         // Audit / Coordination Watermarks
         private String filingQuarter;
