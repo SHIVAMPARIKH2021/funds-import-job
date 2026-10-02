@@ -1,101 +1,146 @@
 package funds.processor;
 
 import ch.qos.logback.core.util.StringUtil;
+import funds.constants.Tags;
+import funds.model.FundMaster;
 import funds.model.BenchmarkMaster;
 import funds.model.ComplianceRules;
-import funds.model.FundMaster;
 import funds.model.RawFundSource;
 import funds.repository.AnalyticsRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.annotation.BeforeStep;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Pattern;
 
+@Slf4j
 @Component
-public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundMaster> {
+@StepScope
+public class FundsItemProcessor implements ItemProcessor<RawFundSource, List<FundMaster>> {
 
-    @Value("{jobParameters['executor']}")
+    @Value("#{jobParameters['executor'] ?: 'SYSTEM'}")
     private String executor;
 
-    @Value("{jobParameters['dryrun']}")
+    @Value("#{jobParameters['dryrun'] ?: 'false'}")
     private String dryRun;
 
-    @Autowired
-    private AnalyticsRepository analyticsRepository;
+    private final AnalyticsRepository analyticsRepository;
+    private final Map<Integer, Pattern> complianceRuleMap = new HashMap<>();
+    private List<ComplianceRules> complianceRules = Collections.emptyList();
 
-    private Map<Integer, Pattern> complianceRuleMap = new HashMap<>();
+    // Grouped 1:N cache loaded once per step: accession_number -> List<BenchmarkMaster>
+    private Map<String, List<BenchmarkMaster>> benchmarksByAccessionMap = Collections.emptyMap();
 
-    private List<ComplianceRules> complianceRules;
+    private Map<String, String> fundNamesByTagMap = Collections.emptyMap();
 
+    public FundsItemProcessor(AnalyticsRepository analyticsRepository) {
+        this.analyticsRepository = analyticsRepository;
+    }
 
     @BeforeStep
-    public void setup() {
-        complianceRules = analyticsRepository.findByIsActiveTrueOrderByPriorityAsc();
-        complianceRules.forEach(rule -> {
-            if (Boolean.TRUE.equals(rule.getIsRegex())) {
-                complianceRuleMap.put(rule.getRuleId(),
-                        Pattern.compile(rule.getPattern(), Pattern.CASE_INSENSITIVE | Pattern.DOTALL));
-            }
-        });
-    }
+    public void setup(StepExecution stepExecution) {
+        // 1. Pre-compile active compliance regex rules
+        this.complianceRules = analyticsRepository.findByIsActiveTrueOrderByPriorityAsc();
+        this.complianceRuleMap.clear();
 
+        for (ComplianceRules rule : this.complianceRules) {
+            if (Boolean.TRUE.equals(rule.getIsRegex()) && rule.getPattern() != null) {
+                this.complianceRuleMap.put(
+                        rule.getRuleId(),
+                        Pattern.compile(rule.getPattern(), Pattern.CASE_INSENSITIVE | Pattern.DOTALL)
+                );
+            }
+        }
+
+        // 2. Preload grouped benchmarks by accession number (O(1) memory lookup)
+        this.benchmarksByAccessionMap = analyticsRepository.mapfindBenchmarksGroupedByAccession();
+
+        this.fundNamesByTagMap.clear();
+        this.fundNamesByTagMap = analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+
+        log.info("Initialized {} compliance rules and {} distinct accession benchmarks for step '{}'",
+                this.complianceRules.size(), this.benchmarksByAccessionMap.size(), stepExecution.getStepName());
+    }
 
     @Override
-    public FundMaster process(RawFundSource item) throws Exception {
-        if (StringUtil.isNullOrEmpty(item.getSeriesId())) {
-            return null; // Filtering invalid input; skipped by writer
+    public List<FundMaster> process(RawFundSource item) throws Exception {
+        if (item == null || StringUtil.isNullOrEmpty(item.getSeriesId())) {
+            return null; // Skip invalid records
         }
 
-        // 1. Resolve existing entity for Upsert, or instantiate a new one
-        FundMaster fund = analyticsRepository.findBySeriesId(item.getSeriesId())
-                .orElseGet(() -> {
-                    FundMaster newFund = new FundMaster();
-                    newFund.setSeriesId(item.getSeriesId());
-                    newFund.setCreatedBy(this.executor); // Honors explicit executor audit tag
-                    return newFund;
-                });
+        if (Boolean.parseBoolean(this.dryRun)) {
+            return null;
+        }
 
+        String classifiedStrategy = evaluateStrategy(item.getStrategyNarrative());
+        String accessionNumber = item.getAccessionNumber() != null ? item.getAccessionNumber().strip() : null;
+
+        List<BenchmarkMaster> matchedBenchmarks = accessionNumber != null
+                ? this.benchmarksByAccessionMap.getOrDefault(accessionNumber, Collections.emptyList())
+                : Collections.emptyList();
+
+        List<FundMaster> fundEntries = new ArrayList<>();
+
+        if (!matchedBenchmarks.isEmpty()) {
+            // Fan-out: Create one fund_master record per associated benchmark
+            for (BenchmarkMaster bm : matchedBenchmarks) {
+                FundMaster fund = createBaseFundEntity(item, classifiedStrategy);
+                fund.setBenchmarkId(bm.getBenchmarkId()); // java.util.UUID
+                fund.setBenchmarkName(bm.getBenchmarkName());
+                fundEntries.add(fund);
+            }
+        } else {
+            // No comparative benchmark declared for this accession filing: emit single entry with null benchmark
+            FundMaster fund = createBaseFundEntity(item, classifiedStrategy);
+            fund.setBenchmarkId(null);
+            fund.setBenchmarkName(null);
+            fundEntries.add(fund);
+        }
+
+        return fundEntries;
+    }
+
+    private FundMaster createBaseFundEntity(RawFundSource item, String classifiedStrategy) {
+        FundMaster fund = new FundMaster();
+        fund.setFundFamily(item.getFundFamily());
+        // Use the fund name from the tag mapping if available; otherwise, fallback to the fund family
+        fund.setFundName(this.fundNamesByTagMap.getOrDefault(item.getSeriesId().strip(), item.getFundFamily()));
+        fund.setSeriesId(item.getSeriesId().strip());
         fund.setCik(item.getCik());
+        fund.setAccessionNumber(item.getAccessionNumber());
         fund.setPrimaryTicker(item.getTicker());
         fund.setStrategyNarrative(item.getStrategyNarrative());
-
-        // 2. Classify Strategy Type via Compliance Rules
-        String classifiedStrategy = evaluateStrategy(item.getStrategyNarrative());
         fund.setStrategyType(classifiedStrategy);
-
-
-    // Return null on dry runs to prevent persistence
-        return Boolean.getBoolean(this.dryRun.toLowerCase()) ? null : fund;
-}
-
-private String evaluateStrategy(String narrative) {
-    String UNKNOWN_FUND_TYPE = "UNKNOWN";
-    if (StringUtil.isNullOrEmpty(narrative)) {
-        return UNKNOWN_FUND_TYPE;
+        fund.setCreatedBy(this.executor);
+        fund.setUpdatedBy(this.executor);
+        return fund;
     }
 
-    for (ComplianceRules rule : complianceRules) {
-        boolean matches;
-        if (Boolean.TRUE.equals(rule.getIsRegex())) {
-            Pattern pattern = complianceRuleMap.get(rule.getRuleId());
-            matches = pattern != null && pattern.matcher(narrative).find(); //Finds keyword 'Active'/'Passive'
-        } else {
-            matches = narrative.toLowerCase().contains(rule.getPattern().toLowerCase());
+    private String evaluateStrategy(String narrative) {
+        String UNKNOWN_TYPE = "UNKNOWN";
+        if (StringUtil.isNullOrEmpty(narrative)) {
+            return UNKNOWN_TYPE;
         }
 
-        if (matches) {
-            return rule.getTargetStrategy();
+        for (ComplianceRules rule : complianceRules) {
+            boolean matches;
+            if (Boolean.TRUE.equals(rule.getIsRegex())) {
+                Pattern pattern = complianceRuleMap.get(rule.getRuleId());
+                matches = pattern != null && pattern.matcher(narrative).find();
+            } else {
+                matches = narrative.toLowerCase().contains(rule.getPattern().toLowerCase());
+            }
+
+            if (matches) {
+                return rule.getTargetStrategy();
+            }
         }
+
+        return UNKNOWN_TYPE;
     }
-
-    return UNKNOWN_FUND_TYPE;
-}
-
 }

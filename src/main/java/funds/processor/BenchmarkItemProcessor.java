@@ -3,6 +3,7 @@ package funds.processor;
 import ch.qos.logback.core.util.StringUtil;
 import funds.model.BenchmarkCandidate;
 import funds.model.BenchmarkMaster;
+import funds.model.RawBenchmarkSource;
 import funds.repository.AnalyticsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.StepExecution;
@@ -20,7 +21,7 @@ import java.util.regex.PatternSyntaxException;
 @Slf4j
 @Component
 @StepScope
-public class BenchmarkItemProcessor implements ItemProcessor<String, BenchmarkMaster> {
+public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource, BenchmarkMaster> {
 
     private final String benchmarkRegex;
     private final String executor;
@@ -51,7 +52,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<String, BenchmarkMa
         }
 
         // 2. Assign directly to the instance field (avoid local variable shadowing)
-        this.rules = analyticsRepository.findAllBenchmarks();
+        this.rules = analyticsRepository.fetchBenchmarkProviderRules();
         this.patternCache.clear();
 
         if (this.rules != null) {
@@ -75,13 +76,13 @@ public class BenchmarkItemProcessor implements ItemProcessor<String, BenchmarkMa
     }
 
     @Override
-    public BenchmarkMaster process(String benchmarkName) {
-        if (StringUtil.isNullOrEmpty(benchmarkName)) {
+    public BenchmarkMaster process(RawBenchmarkSource benchmark) {
+        if (StringUtil.isNullOrEmpty(benchmark.getBenchmarkName())) {
             return null; // Skip invalid records
         }
 
         // 1. Clean boilerplate text using the pre-compiled pattern
-        String cleaned = this.boilerplatePattern.matcher(benchmarkName).replaceAll("").trim();
+        String cleaned = this.boilerplatePattern.matcher(benchmark.getBenchmarkName()).replaceAll("").trim();
         if (cleaned.isBlank()) {
             return null;
         }
@@ -100,15 +101,13 @@ public class BenchmarkItemProcessor implements ItemProcessor<String, BenchmarkMa
         }
 
         // 3. Assemble entity with deterministic Type-3 UUID from the clean name
-        BenchmarkMaster benchmark = new BenchmarkMaster();
-        String benchmarkId = "BM_" + UUID.nameUUIDFromBytes(cleaned.getBytes(StandardCharsets.UTF_8));
+        BenchmarkMaster benchmarkMaster = new BenchmarkMaster();
+        benchmarkMaster.setBenchmarkId(UUID.nameUUIDFromBytes(cleaned.getBytes(StandardCharsets.UTF_8)));
+        benchmarkMaster.setBenchmarkName(cleaned);
+        benchmarkMaster.setBenchmarkProvider(matchedProvider);
+        benchmarkMaster.setBenchmarkType(matchedType);
+        benchmarkMaster.setCreatedBy(this.executor);
 
-        benchmark.setBenchmarkId(benchmarkId);
-        benchmark.setBenchmarkName(cleaned);
-        benchmark.setBenchmarkProvider(matchedProvider);
-        benchmark.setBenchmarkType(matchedType);
-        benchmark.setCreatedBy(this.executor);
-
-        return benchmark;
+        return benchmarkMaster;
     }
 }

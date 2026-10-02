@@ -14,6 +14,7 @@
                 sub.adsh AS accessionNumber,
                 sub.filed as filingDate,
                 sub.cik,
+                sub.name as fundFamily,
                 ctm.symbol AS ticker,
                 ctm.class_id as classId,
                 td.series AS seriesId,
@@ -46,8 +47,10 @@
         <constructor-arg>
             <value><![CDATA[
             where
-            td."version" = :version
-            and td.tag = :tag
+            td.tag = :tag
+            AND td.version LIKE 'oef/%'
+            AND sub.filed >= :minDate
+            AND sub.filed <= :maxDate;
          ]]></value>
         </constructor-arg>
     </bean>
@@ -106,6 +109,7 @@
                     benchmark_id,
                     benchmark_name,
                     created_by,
+                    updated_by,
                     created_at,
                     updated_at
                 ) VALUES (
@@ -120,20 +124,21 @@
                     :benchmarkId,
                     :benchmarkName,
                     :createdBy,
+                    :updatedBy,
                     CURRENT_TIMESTAMP,
                     CURRENT_TIMESTAMP
                 )
-                ON CONFLICT (series_id) DO UPDATE SET
+                ON CONFLICT (series_id, benchmark_id) DO UPDATE SET
                     cik = EXCLUDED.cik,
-                    fund_name = EXCLUDED.fund_name,
-                    fund_family = EXCLUDED.fund_family,
-                    primary_ticker = EXCLUDED.primary_ticker,
-                    investment_objective = EXCLUDED.investment_objective,
+                    fund_name = COALESCE(EXCLUDED.fund_name, analytics.fund_master.fund_name),
+                    fund_family = COALESCE(EXCLUDED.fund_family, analytics.fund_master.fund_family),
+                    primary_ticker = COALESCE(EXCLUDED.primary_ticker, analytics.fund_master.primary_ticker),
+                    investment_objective = COALESCE(EXCLUDED.investment_objective, analytics.fund_master.investment_objective),
                     strategy_narrative = EXCLUDED.strategy_narrative,
                     strategy_type = EXCLUDED.strategy_type,
-                    benchmark_id = EXCLUDED.benchmark_id,
-                    benchmark_name = EXCLUDED.benchmark_name,
-                    updated_at = CURRENT_TIMESTAMP
+                    benchmark_name = COALESCE(EXCLUDED.benchmark_name, analytics.fund_master.benchmark_name),
+                    updated_by = EXCLUDED.updated_by,
+                    updated_at = CURRENT_TIMESTAMP;
             ]]></value>
         </constructor-arg>
     </bean>
@@ -168,7 +173,8 @@
                     NULLIF(TRIM(pl.std), ''),
                     NULLIF(TRIM(pl.verbose), ''),
                     nf.measure
-                    ) AS raw_benchmark_name
+                    ) AS benchmarkName,
+                nf.adsh AS accessionNumber
                 FROM sec_financials.numeric_facts nf
                   LEFT JOIN sec_financials.presentation_labels pl
                   ON nf.adsh = pl.adsh
@@ -210,19 +216,46 @@
        </constructor-arg>
     </bean>
 
-    <bean id="findBenchmarkByBenchmarkId" class="java.lang.String">
+    <bean id="findBenchmarkByAccessionNumbers" class="java.lang.String">
         <constructor-arg>
             <value>
                 <![CDATA[
-                select
-                  bm.benchmark_id as benchmarkId,
-                  bm.benchmark_name as benchmarkName,
-                  bm.benchmark_provider as benchmarkProvider,
-                  bm.benchmark_type as benchmarkType
-                from analytics.benchmark_master bm
-                  join analytics.fund_master fm
-                  on fm.benchmark_id = bm.benchmark_id
-                where bm.benchmark_name = :benchmarkName
+                SELECT
+                  benchmark_id AS benchmarkId,
+                  benchmark_name AS benchmarkName,
+                  benchmark_provider AS benchmarkProvider,
+                  benchmark_type AS benchmarkType
+                FROM analytics.benchmark_master
+                WHERE accession_number IN(:accessionNumbers)
+                ]]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findBenchmarksGroupedByAccession" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                SELECT
+                  benchmark_id AS benchmarkId,
+                  benchmark_name AS benchmarkName,
+                  benchmark_provider AS benchmarkProvider,
+                  benchmark_type AS benchmarkType
+                FROM analytics.benchmark_master
+                WHERE accession_number IS NOT NULL
+                ORDER BY accession_number, benchmark_name
+                ]]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findAccessionNumberFromBenchmark" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                SELECT DISTINCT
+                  accession_number AS accessionNumber
+                FROM analytics.benchmark_master;
                 ]]]>
             </value>
         </constructor-arg>
@@ -264,6 +297,29 @@
                     join analytics.benchmark_master bm
                     on fm.benchmark_id = bm.benchmark_id
                 where fm.series_id = :seriesId
+                ]]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findFundNamesByTagSql" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                SELECT DISTINCT
+                    td.series AS seriesId,
+                    COALESCE(
+                        NULLIF(TRIM(pl.terse), ''),
+                        NULLIF(TRIM(pl.std), ''),
+                        NULLIF(TRIM(pl.verbose), '')
+                    ) AS fundName
+                FROM sec_financials.text_disclosures td
+                JOIN sec_financials.presentation_labels pl
+                  ON td.adsh = pl.adsh
+                 AND pl.tag LIKE CONCAT('%', td.series, '%')
+                WHERE td.tag = :tag
+                  AND td.series IS NOT NULL
+                  AND COALESCE(pl.terse, pl.std, pl.verbose) IS NOT NULL;
                 ]]]>
             </value>
         </constructor-arg>
