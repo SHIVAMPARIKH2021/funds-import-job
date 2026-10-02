@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.util.List;
+
 @Configuration
 public class FundsImportJobConfig {
 
@@ -42,7 +44,8 @@ public class FundsImportJobConfig {
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
             @Qualifier("fundsImportReader")ItemReader<RawFundSource> fundsImportReader,
-            @Qualifier("fundsItemProcessor")FundsItemProcessor fundsItemProcessor,
+            @Qualifier("fundsItemProcessor")ItemProcessor<? super RawFundSource,
+                    ? extends FundMaster> fundsItemProcessor,
             @Qualifier("fundsItemWriter")ItemWriter<FundMaster> fundsItemWriter
     ) {
         return new StepBuilder("fundsImportStep", jobRepository)
