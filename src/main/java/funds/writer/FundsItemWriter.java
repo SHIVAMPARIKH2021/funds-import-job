@@ -27,7 +27,7 @@ public class FundsItemWriter implements ItemWriter<FundMaster> {
 
         log.debug("Persisting chunk of {} fund records to analytics.fund_master", items.size());
 
-        // Saves and cascades within the chunk transaction managed by Spring Batch
+        analyticsRepository.saveAllFunds(items);
 
         log.info("Successfully persisted {} fund records", items.size());
     }
