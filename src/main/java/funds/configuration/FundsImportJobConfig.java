@@ -1,5 +1,6 @@
 package funds.configuration;
 
+import funds.model.FundImportPayload;
 import funds.model.FundMaster;
 import funds.model.RawFundSource;
 import funds.processor.FundsItemProcessor;
@@ -50,7 +51,7 @@ public class FundsImportJobConfig {
             FundsItemWriter fundsItemWriter
     ) {
         return new StepBuilder("fundsImportStep", jobRepository)
-                .<RawFundSource, List<FundMaster>>chunk(CHUNK_SIZE, transactionManager)
+                .<RawFundSource, FundImportPayload>chunk(CHUNK_SIZE, transactionManager)
                 .reader(fundsImportReader)
                 .processor(fundsItemProcessor)
                 .writer(fundsItemWriter)

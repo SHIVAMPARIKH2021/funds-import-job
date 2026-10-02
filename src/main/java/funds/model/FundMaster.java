@@ -24,4 +24,8 @@ public class FundMaster extends BaseModel {
     private String benchmarkName;
     private String primaryTicker;
     private String accessionNumber;
+    // New cadence & update flags
+    private String reportingCadence = "ANNUAL";
+    private Boolean hasDailyPricing = Boolean.TRUE;
+    private Boolean hasQuarterlyHoldings = Boolean.TRUE;
 }

@@ -8,11 +8,8 @@ import java.util.Map;
 import java.util.Optional;
 
 public interface AnalyticsRepository {
-    Optional<BenchmarkMaster> findBenchMarkByBenchmarkName(String benchmarkName);
 
     List<ComplianceRules> findByIsActiveTrueOrderByPriorityAsc();
-
-    List<BenchmarkMaster> findBenchmarkMasterByAccessionNumbers(List<String> accessionNumbers);
 
     List<RawFundSource> findRawFundsForQuarter(String tag, LocalDate minDate, LocalDate maxDate);
 
@@ -20,15 +17,13 @@ public interface AnalyticsRepository {
 
     List<BenchmarkCandidate> fetchBenchmarkProviderRules();
 
-    void saveBenchmark(String benchmarkName, String benchmarkProvider, String benchmarkType, String createdBy);
-
     void saveAllBenchmarks(List<? extends BenchmarkMaster> benchmarks);
-
-    List<String> findAccessionNumberFromBenchmark();
 
     Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccession();
 
     Map<String, String> findFundNamesByTag(String tag);
 
     void saveAllFunds(List<? extends FundMaster> items);
+
+    void upsertFundBenchmarkAssociations(List<FundBenchmarkAssociation> associations);
 }
