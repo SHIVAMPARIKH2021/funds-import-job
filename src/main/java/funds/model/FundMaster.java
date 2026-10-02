@@ -25,6 +25,9 @@ public class FundMaster extends BaseModel {
     private String primaryTicker;
     private String accessionNumber;
     // New cadence & update flags
+    /** Because we are using StrategyNarrativeTextBlock, hence the default cadence is annual.
+    This can be updated later if we find a fund with a different cadence.
+    **/
     private String reportingCadence = "ANNUAL";
     private Boolean hasDailyPricing = Boolean.TRUE;
     private Boolean hasQuarterlyHoldings = Boolean.TRUE;
