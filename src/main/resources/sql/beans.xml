@@ -48,7 +48,7 @@
         <constructor-arg>
             <value><![CDATA[
             where
-            td.tag IN(:tag)
+            td.tag IN(:tags)
             AND sub.filed >= :minDate
             AND sub.filed <= :maxDate
          ]]></value>

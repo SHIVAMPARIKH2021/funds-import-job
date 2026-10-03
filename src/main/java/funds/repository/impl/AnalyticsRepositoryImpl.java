@@ -78,9 +78,9 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     }
 
     @Override
-    public List<RawFundSource> findRawFundsForQuarter(String tag, LocalDate minDate, LocalDate maxDate) {
+    public List<RawFundSource> findRawFundsForQuarter(List<String> tags, LocalDate minDate, LocalDate maxDate) {
         MapSqlParameterSource MapSqlParameterSource = new MapSqlParameterSource()
-                .addValue("tag", tag)
+                .addValue("tags", tags)
                 .addValue("minDate", minDate)
                 .addValue("maxDate", maxDate);
         return namedParameterJdbcTemplate.query(getRawFundData, MapSqlParameterSource, new BeanPropertyRowMapper<>(RawFundSource.class));
