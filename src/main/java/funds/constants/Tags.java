@@ -14,7 +14,9 @@ public enum Tags {
     RETURN_BEFORE_TAXES("ReturnBeforeTaxes"),
     AFTER_TAXES_ON_DISTRIBUTIONS("AfterTaxesOnDistributions"),
     AFTER_TAXES_ON_DISTRIBUTIONS_AND_SALES("AfterTaxesOnDistributionsAndSales"),
-    STRATEGY_NARRATIVE_TEXT_BLOCK("StrategyNarrativeTextBlock");
+    STRATEGY_NARRATIVE_TEXT_BLOCK("StrategyNarrativeTextBlock"),
+    OBJECTIVE_PRIMARY_TEXT_BLOCK("ObjectivePrimaryTextBlock"),
+    OBJECTIVE_SECONDARY_TEXT_BLOCK("ObjectiveSecondaryTextBlock");
 
     private final String tag;
 

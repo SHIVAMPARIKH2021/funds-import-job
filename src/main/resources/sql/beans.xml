@@ -18,7 +18,8 @@
                 ctm.symbol AS ticker,
                 ctm.class_id as classId,
                 td.series AS seriesId,
-                td.value AS strategyNarrative,
+                td.tag AS disclosureTag,
+                td.value AS disclosureValue,
                 td.footnote as additionalStrategyNarrative
             </value>
         </constructor-arg>
@@ -47,15 +48,26 @@
         <constructor-arg>
             <value><![CDATA[
             where
-            td.tag = :tag
+            td.tag = IN(:tag)
             AND sub.filed >= :minDate
             AND sub.filed <= :maxDate;
          ]]></value>
         </constructor-arg>
     </bean>
 
+    <!-- ================================================================= -->
+    <!-- ORDER BY CLAUSE BASE & FRAGMENTS                                    -->
+    <!-- ================================================================= -->
+    <bean id="orderByClause" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+            ORDER BY td.series, td.tag
+         ]]></value>
+        </constructor-arg>
+    </bean>
+
     <bean id="getRawFundData" class="java.lang.String">
-        <constructor-arg value="#{selectRawFundSourceQuery + ' ' + fromRawFundSourceQuery + ' ' + whereClause}"/>
+        <constructor-arg value="#{selectRawFundSourceQuery + ' ' + fromRawFundSourceQuery + ' ' + whereClause + ' ' + orderByClause}"/>
     </bean>
 
     <!-- ================================================================= -->
@@ -130,21 +142,21 @@
                 CURRENT_TIMESTAMP
             )
             ON CONFLICT (series_id) DO UPDATE SET
-                cik                    = EXCLUDED.cik,
-                fund_name              = COALESCE(EXCLUDED.fund_name, analytics.fund_master.fund_name),
-                fund_family            = COALESCE(EXCLUDED.fund_family, analytics.fund_master.fund_family),
-                primary_ticker         = COALESCE(EXCLUDED.primary_ticker, analytics.fund_master.primary_ticker),
-                investment_objective   = COALESCE(EXCLUDED.investment_objective, analytics.fund_master.investment_objective),
-                strategy_narrative     = EXCLUDED.strategy_narrative,
-                strategy_type          = EXCLUDED.strategy_type,
-                benchmark_id           = COALESCE(EXCLUDED.benchmark_id, analytics.fund_master.benchmark_id),
-                benchmark_name         = COALESCE(EXCLUDED.benchmark_name, analytics.fund_master.benchmark_name),
-                accession_number       = EXCLUDED.accession_number,
-                reporting_cadence      = COALESCE(EXCLUDED.reporting_cadence, analytics.fund_master.reporting_cadence),
-                has_daily_pricing      = COALESCE(EXCLUDED.has_daily_pricing, analytics.fund_master.has_daily_pricing),
+                cik = COALESCE(EXCLUDED.cik, analytics.fund_master.cik),
+                fund_name = COALESCE(EXCLUDED.fund_name, analytics.fund_master.fund_name),
+                fund_family = COALESCE(EXCLUDED.fund_family, analytics.fund_master.fund_family),
+                primary_ticker = COALESCE(EXCLUDED.primary_ticker, analytics.fund_master.primary_ticker),
+                investment_objective = COALESCE(EXCLUDED.investment_objective, analytics.fund_master.investment_objective),
+                strategy_narrative = COALESCE(EXCLUDED.strategy_narrative, analytics.fund_master.strategy_narrative),
+                strategy_type = COALESCE(EXCLUDED.strategy_type, analytics.fund_master.strategy_type),
+                benchmark_id = COALESCE(EXCLUDED.benchmark_id, analytics.fund_master.benchmark_id),
+                benchmark_name = COALESCE(EXCLUDED.benchmark_name, analytics.fund_master.benchmark_name),
+                accession_number  = COALESCE(EXCLUDED.accession_number, analytics.fund_master.accession_number),
+                reporting_cadence = COALESCE(EXCLUDED.reporting_cadence, analytics.fund_master.reporting_cadence),
+                has_daily_pricing = COALESCE(EXCLUDED.has_daily_pricing, analytics.fund_master.has_daily_pricing),
                 has_quarterly_holdings = COALESCE(EXCLUDED.has_quarterly_holdings, analytics.fund_master.has_quarterly_holdings),
-                updated_by             = EXCLUDED.updated_by,
-                updated_at             = CURRENT_TIMESTAMP
+                updated_by = EXCLUDED.updated_by,
+                updated_at = CURRENT_TIMESTAMP
             ]]></value>
         </constructor-arg>
     </bean>

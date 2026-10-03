@@ -24,7 +24,8 @@ public class RawFundSource extends BaseModel {
         private String fundFamily;
 
         // Narrative Blocks (Target of Regex & Compliance Classification)
-        private String strategyNarrative;
+        private String disclosureValue;
+        private String disclosureTag;
         private String additonalStrategyNarrative;
         private String benchmarkName;
 
