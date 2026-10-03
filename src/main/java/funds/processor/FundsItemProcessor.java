@@ -75,7 +75,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             return null;
         }
 
-        String classifiedStrategy = evaluateStrategy(item.getStrategyNarrative());
+        String classifiedStrategy = evaluateStrategy(item.getDisclosureValue());
 
         FundMaster fund = createBaseFundEntity(item, classifiedStrategy);
 
