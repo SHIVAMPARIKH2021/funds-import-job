@@ -5,13 +5,12 @@ import funds.model.*;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public interface AnalyticsRepository {
 
     List<ComplianceRules> findByIsActiveTrueOrderByPriorityAsc();
 
-    List<RawFundSource> findRawFundsForQuarter(String tag, LocalDate minDate, LocalDate maxDate);
+    List<RawFundSource> findRawFundsForQuarter(List<String> tags, LocalDate minDate, LocalDate maxDate);
 
     List<RawBenchmarkSource> findAllBenchmarksByTags(List<String> includedTags, List<String> excludedTags);
 

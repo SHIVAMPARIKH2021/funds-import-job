@@ -11,10 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Component
 @StepScope
@@ -39,12 +36,15 @@ public class FundsImportReader implements ItemReader<RawFundSource> {
     public RawFundSource read() throws Exception {
         if(fundIterator == null) {
             // Fetch the fund data based on version and tag
-            List<RawFundSource> funds = analyticsRepository.findRawFundsForQuarter(
+            List<String> tags = Arrays.asList(
                     Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag(),
-                    calculateQuarterDateRange(Integer.parseInt(year),
-                            Integer.parseInt(quarter)).get("minDate"),
-                    calculateQuarterDateRange(Integer.parseInt(year),
-                            Integer.parseInt(quarter)).get("maxDate"))
+                    Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag(),
+                    Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag()
+            );
+
+            Map<String, LocalDate> dateRangeMap = calculateQuarterDateRange(Integer.parseInt(year), Integer.parseInt(quarter));
+            List<RawFundSource> funds = analyticsRepository
+                    .findRawFundsForQuarter(tags, dateRangeMap.get("minDate"), dateRangeMap.get("maxDate"))
                     .stream().distinct().toList();
             this.fundIterator = funds.iterator();
         }
