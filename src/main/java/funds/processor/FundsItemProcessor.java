@@ -115,13 +115,22 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         fund.setCik(item.getCik());
         fund.setAccessionNumber(item.getAccessionNumber());
         fund.setPrimaryTicker(item.getTicker());
-        fund.setStrategyNarrative(item.getStrategyNarrative());
         fund.setStrategyType(classifiedStrategy);
         fund.setCreatedBy(this.executor);
         fund.setReportingCadence("ANNUAL");
         fund.setHasDailyPricing(Boolean.TRUE);
         fund.setHasQuarterlyHoldings(Boolean.TRUE);
+        resolveStrategyNarrativeAndInvestmentObjective(item, fund);
         return fund;
+    }
+
+    private void resolveStrategyNarrativeAndInvestmentObjective(RawFundSource item, FundMaster fund) {
+        if (item.getDisclosureTag().equalsIgnoreCase(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag())) {
+            fund.setStrategyNarrative(item.getDisclosureValue());
+        } else if (item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag())
+                    || item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag())) {
+            fund.setInvestmentObjective(item.getDisclosureValue());
+        }
     }
 
     private String evaluateStrategy(String narrative) {
