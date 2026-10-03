@@ -50,7 +50,7 @@
             where
             td.tag IN(:tag)
             AND sub.filed >= :minDate
-            AND sub.filed <= :maxDate;
+            AND sub.filed <= :maxDate
          ]]></value>
         </constructor-arg>
     </bean>
@@ -61,7 +61,7 @@
     <bean id="orderByClause" class="java.lang.String">
         <constructor-arg>
             <value><![CDATA[
-            ORDER BY td.series, td.tag
+            ORDER BY td.series, td.tag;
          ]]></value>
         </constructor-arg>
     </bean>
