@@ -37,6 +37,7 @@
                 on sub.adsh = td.adsh
               join sec_financials.company_tickers_mf ctm
                 on ctm.series_id  = td.series
+                and ctm.is_active = true
             ]]></value>
         </constructor-arg>
     </bean>
