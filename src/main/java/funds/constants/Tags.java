@@ -16,7 +16,8 @@ public enum Tags {
     AFTER_TAXES_ON_DISTRIBUTIONS_AND_SALES("AfterTaxesOnDistributionsAndSales"),
     STRATEGY_NARRATIVE_TEXT_BLOCK("StrategyNarrativeTextBlock"),
     OBJECTIVE_PRIMARY_TEXT_BLOCK("ObjectivePrimaryTextBlock"),
-    OBJECTIVE_SECONDARY_TEXT_BLOCK("ObjectiveSecondaryTextBlock");
+    OBJECTIVE_SECONDARY_TEXT_BLOCK("ObjectiveSecondaryTextBlock"),
+    INVESTMENT_STRATEGY_TEXT_BLOCK("InvestmentStrategyTextBlock");
 
     private final String tag;
 

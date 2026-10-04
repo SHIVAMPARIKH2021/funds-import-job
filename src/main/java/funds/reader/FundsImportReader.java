@@ -39,7 +39,8 @@ public class FundsImportReader implements ItemReader<RawFundSource> {
             List<String> tags = Arrays.asList(
                     Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag(),
                     Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag(),
-                    Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag()
+                    Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag(),
+                    Tags.INVESTMENT_STRATEGY_TEXT_BLOCK.getTag()
             );
 
             Map<String, LocalDate> dateRangeMap = calculateQuarterDateRange(Integer.parseInt(year), Integer.parseInt(quarter));
