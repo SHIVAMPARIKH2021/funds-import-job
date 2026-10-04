@@ -125,7 +125,10 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
     }
 
     private void resolveStrategyNarrativeAndInvestmentObjective(RawFundSource item, FundMaster fund) {
-        if (item.getDisclosureTag().equalsIgnoreCase(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag())) {
+        if (item.getDisclosureTag().equalsIgnoreCase(
+                Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag())
+            || item.getDisclosureTag().equalsIgnoreCase(
+                Tags.INVESTMENT_STRATEGY_TEXT_BLOCK.getTag())) {
             fund.setStrategyNarrative(item.getDisclosureValue());
         } else if (item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag())
                     || item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag())) {
