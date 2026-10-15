@@ -8,10 +8,9 @@ pipeline {
     }
 
     parameters {
-        choice(name: 'FILING_YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
-        choice(name: 'FILING_QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
-        string(name: 'EXECUTOR_NAME', defaultValue: 'System User', description: 'Audit tracking user')
-        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Simulate processing without persisting changes')
+        choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
+        choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
+        string(name: 'EXECUTOR', defaultValue: 'System User', description: 'Audit tracking user')
         booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host')
     }
 
@@ -98,6 +97,7 @@ pipeline {
                 script {
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
                         sh """
+                            set -e
                             ssh -i "\$SSH_KEY" \
                                 -o StrictHostKeyChecking=no \
                                 -o ConnectTimeout=15 \
@@ -111,10 +111,9 @@ pipeline {
                                     -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
                                     -e JAVA_OPTS='-Xms256m -Xmx1024m' \
                                     ${IMAGE_BASE_NAME}:${GIT_COMMIT_SHORT} \
-                                    year=${params.FILING_YEAR} \
-                                    quarter=${params.FILING_QUARTER} \
-                                    executor='${params.EXECUTOR_NAME}' \
-                                    dryRun=${params.DRY_RUN}"
+                                    year=${params.YEAR} \
+                                    quarter=${params.QUARTER} \
+                                    executor='${params.EXECUTOR}'"
                         """
                     }
                 }
