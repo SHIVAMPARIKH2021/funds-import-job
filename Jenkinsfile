@@ -8,7 +8,7 @@ pipeline {
     }
 
     parameters {
-        choice(name: 'FILING_YEAR', choices: ['2026', '2025', '2024'], description: 'Target filing year for the batch job')
+        choice(name: 'FILING_YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
         choice(name: 'FILING_QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
         string(name: 'EXECUTOR_NAME', defaultValue: 'System User', description: 'Audit tracking user')
         booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Simulate processing without persisting changes')
