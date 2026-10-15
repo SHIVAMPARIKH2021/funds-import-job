@@ -21,13 +21,13 @@ public class FundImportService implements JobService {
     @Autowired
     private Job fundsImportJob;
 
-    @Value("${quarter:default}")
+    @Value("${quarter:#{null}}")
     private String quarter;
 
-    @Value("${year:default}")
+    @Value("${year:#{null}}")
     private String year;
 
-    @Value("${executor:default}")
+    @Value("${executor:System}")
     private String executor;
 
     @Value("${dryrun:default}")
@@ -43,7 +43,7 @@ public class FundImportService implements JobService {
             throw new InvalidParameterException("[" + year +"]" + " quarter is invalid.");
         }
         JobParameters params = new JobParametersBuilder()
-                .addString("executor", (executor != null && !executor.isBlank()) ? executor : "SYSTEM")
+                .addString("executor", executor)
                 .addString("quarter", quarter)
                 .addString("year", year)
                 .addLong("runId", System.currentTimeMillis())

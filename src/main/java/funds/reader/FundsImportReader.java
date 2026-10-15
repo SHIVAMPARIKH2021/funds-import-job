@@ -11,7 +11,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Iterator;
+import java.util.Map;
 
 @Component
 @StepScope
@@ -20,16 +23,16 @@ public class FundsImportReader implements ItemReader<RawFundSource> {
     @Autowired
     private final AnalyticsRepository analyticsRepository;
 
-    @Value("#{jobParameters['year']}")
-    private String year;
-
-    @Value("#{jobParameters['quarter']}")
-    private String quarter;
-
+    private final String year;
+    private final String quarter;
     private Iterator<RawFundSource> fundIterator;
 
-    public FundsImportReader(AnalyticsRepository analyticsRepository) {
+    public FundsImportReader(AnalyticsRepository analyticsRepository,
+                             @Value("#{jobParameters['year']}") String year,
+                             @Value("#{jobParameters['quarter']}") String quarter) {
         this.analyticsRepository = analyticsRepository;
+        this.year = year;
+        this.quarter = quarter;
     }
 
     @Override
