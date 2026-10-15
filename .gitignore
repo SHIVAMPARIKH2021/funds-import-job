@@ -35,3 +35,8 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Doppler secrets fetched by CI (never commit)
+doppler-secrets.json
+doppler-secrets.env
+.DS_Store

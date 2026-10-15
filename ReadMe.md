@@ -106,3 +106,21 @@ When orchestrating builds through Jenkins:
 1. Build Step: Run ```./gradlew clean bootJar``` on the controller or agent.
 2. Containerization: Execute ```docker build``` using the generated multi-stage ```Dockerfile```.
 3. Secret Injection: Fetch credentials securely from Jenkins Credentials Manager or AWS Systems Manager (SSM) and map them directly to container environment variables (```-e DB_USER```, ```-e DB_PASSWORD```) during docker run.
+---
+
+## Docker Image Strategy
+- All dependency versions are resolved by Gradle from build.gradle (via the pinned wrapper in gradle/wrapper/gradle-wrapper.properties) - nothing is hardcoded in this file except the JDK major version (21), which matches the Java toolchain declared in build.gradle.
+
+### Caching strategy:
+1. Build scripts (gradlew, gradle/, build.gradle, settings.gradle) are
+   copied BEFORE the sources, so the dependency-resolution layer is reused
+   on every build where only application code changed.
+2. A BuildKit cache mount (/root/.gradle) persists downloaded dependencies
+   and the Gradle distribution across builds, even when layers are
+   invalidated by a build.gradle change.
+3. Runtime configuration is supplied via environment variables (Spring relaxed binding), e.g.:
+   - SPRING_PROFILES_ACTIVE, SPRING_DATASOURCE_URL,
+   - SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD,
+   - QUARTER, YEAR, EXECUTOR, DRYRUN, BENCHMARK_REGEX
+JAVA_OPTS can be used to tune the JVM, e.g. docker run -e JAVA_OPTS="-Xmx512m"
+---
