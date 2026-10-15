@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:funds_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  batch:
+    jdbc:
+      initialize-schema: always # Generates batch metadata tables in H2 automatically
+    job:
+      enabled: false
+
+# Fallback test properties
+year: "2026"
+quarter: "1"
+executor: "TestRunner"
+dryrun: "true"
+benchmark:
+  regex: '\s*\(reflects no deduction for [^)]*\)'[cite: 5]
