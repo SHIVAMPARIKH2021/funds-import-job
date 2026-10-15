@@ -55,7 +55,7 @@ public class FundImportService implements JobService {
 
     @Override
     public JobExecution processJob() throws InvalidParameterException, JobInstanceAlreadyCompleteException,
-            JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, NoSuchJobException {
+            JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
 
         if (StringUtil.isNullOrEmpty(quarter)) {
             throw new InvalidParameterException("[" + quarter + "] quarter is invalid.");
@@ -67,7 +67,6 @@ public class FundImportService implements JobService {
         String targetYear = year.trim();
         String targetQuarter = quarter.trim();
 
-        // Check if an execution already completed successfully for this year and quarter
         if (!force && isQuarterAlreadyCompleted(targetYear, targetQuarter)) {
             String errorMsg = String.format(
                     "Job execution aborted: A successful execution already exists for Year '%s' and Quarter '%s'. Set 'force=true' to override.",
@@ -90,31 +89,35 @@ public class FundImportService implements JobService {
         return jobLauncher.run(fundsImportJob, params);
     }
 
-    private boolean isQuarterAlreadyCompleted(String targetYear, String targetQuarter) throws NoSuchJobException {
+    private boolean isQuarterAlreadyCompleted(String targetYear, String targetQuarter) {
         String jobName = fundsImportJob.getName();
-        int instanceCount = Math.toIntExact(jobExplorer.getJobInstanceCount(jobName));
-        if (instanceCount == 0) {
-            return false;
-        }
+        try {
+            int instanceCount = Math.toIntExact(jobExplorer.getJobInstanceCount(jobName));
+            if (instanceCount == 0) {
+                return false;
+            }
 
-        // Scan existing instances of this job
-        List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, Math.min(instanceCount, 100));
+            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, Math.min(instanceCount, 100));
 
-        for (JobInstance instance : jobInstances) {
-            List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
-            for (JobExecution execution : executions) {
-                if (execution.getStatus() == BatchStatus.COMPLETED) {
-                    JobParameters params = execution.getJobParameters();
-                    String execYear = params.getString("year");
-                    String execQuarter = params.getString("quarter");
+            for (JobInstance instance : jobInstances) {
+                List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
+                for (JobExecution execution : executions) {
+                    if (execution.getStatus() == BatchStatus.COMPLETED) {
+                        JobParameters params = execution.getJobParameters();
+                        String execYear = params.getString("year");
+                        String execQuarter = params.getString("quarter");
 
-                    if (targetYear.equals(execYear) && targetQuarter.equals(execQuarter)) {
-                        log.info("Found completed run (JobExecutionId: {}) for Year: {}, Quarter: {}",
-                                execution.getId(), execYear, execQuarter);
-                        return true;
+                        if (targetYear.equals(execYear) && targetQuarter.equals(execQuarter)) {
+                            log.info("Found completed run (JobExecutionId: {}) for Year: {}, Quarter: {}",
+                                    execution.getId(), execYear, execQuarter);
+                            return true;
+                        }
                     }
                 }
             }
+        } catch (NoSuchJobException e) {
+            log.info("No prior job instances exist for '{}'. Proceeding with execution.", jobName);
+            return false;
         }
         return false;
     }
