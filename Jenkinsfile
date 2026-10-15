@@ -10,8 +10,9 @@ pipeline {
     parameters {
         choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
         choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
-        string(name: 'EXECUTOR', defaultValue: 'System', description: 'Audit tracking user')
-        booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host')
+        string(name: 'EXECUTOR', defaultValue: 'System User', description: 'Audit tracking user')
+        booleanParam(name: 'SKIP_BUILD', defaultValue: false, description: 'Skip testing and rebuilding; reuse existing image on Windows host')
+        booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host (ignored if SKIP_BUILD is checked)')
     }
 
     environment {
@@ -52,6 +53,9 @@ pipeline {
         }
 
         stage('2. Checkout & Local Test Verification') {
+            when {
+                expression { return !params.SKIP_BUILD }
+            }
             steps {
                 checkout scm
                 script {
@@ -74,6 +78,9 @@ pipeline {
         }
 
         stage('3. Stream Context & Build Docker Image on Windows') {
+            when {
+                expression { return !params.SKIP_BUILD }
+            }
             steps {
                 script {
                     def noCacheFlag = params.FORCE_DOCKER_NO_CACHE ? "--no-cache" : ""
@@ -85,7 +92,7 @@ pipeline {
                                 ${WINDOWS_USER}@${WINDOWS_HOST} \
                                 "docker build ${noCacheFlag} \
                                     -t ${IMAGE_BASE_NAME}:latest \
-                                    -t ${IMAGE_BASE_NAME}:${GIT_COMMIT_SHORT} -"
+                                    -t ${IMAGE_BASE_NAME}:${env.GIT_COMMIT_SHORT} -"
                         """
                     }
                 }
@@ -95,6 +102,10 @@ pipeline {
         stage('4. Execute Spring Batch Job in Container') {
             steps {
                 script {
+                    // Use commit tag if freshly built, otherwise target latest existing image
+                    def targetImage = (params.SKIP_BUILD || !env.GIT_COMMIT_SHORT) ? "${IMAGE_BASE_NAME}:latest" : "${IMAGE_BASE_NAME}:${env.GIT_COMMIT_SHORT}"
+                    echo "Executing batch container using image: ${targetImage}"
+
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
                         sh """
                             set -e
@@ -113,7 +124,7 @@ pipeline {
                                     -e QUARTER='${params.QUARTER}' \
                                     -e EXECUTOR='${params.EXECUTOR}' \
                                     -e JAVA_OPTS='-Xms256m -Xmx1024m' \
-                                    ${IMAGE_BASE_NAME}:${GIT_COMMIT_SHORT}"
+                                    ${targetImage}"
                         """
                     }
                 }
@@ -126,7 +137,7 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "Funds Import Job pipeline completed successfully for commit ${env.GIT_COMMIT_SHORT}."
+            echo "Funds Import Job pipeline completed successfully for Year: ${params.YEAR}, Quarter: ${params.QUARTER}."
         }
         failure {
             echo "Funds Import Job pipeline failed. Inspect the logs above."
