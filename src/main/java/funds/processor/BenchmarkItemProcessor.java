@@ -100,9 +100,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             }
         }
 
-        // 3. Assemble entity with deterministic Type-3 UUID from the clean name
         BenchmarkMaster benchmarkMaster = new BenchmarkMaster();
-        benchmarkMaster.setBenchmarkId(UUID.nameUUIDFromBytes(cleaned.getBytes(StandardCharsets.UTF_8)));
         benchmarkMaster.setBenchmarkName(cleaned);
         benchmarkMaster.setBenchmarkProvider(matchedProvider);
         benchmarkMaster.setBenchmarkType(matchedType);

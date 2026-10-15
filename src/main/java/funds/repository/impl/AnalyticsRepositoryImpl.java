@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
-import java.util.UUID;
 
 @Repository
 public class AnalyticsRepositoryImpl implements AnalyticsRepository {
@@ -129,7 +128,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
 
             BenchmarkMaster bm = new BenchmarkMaster();
             bm.setAccessionNumber(accession);
-            bm.setBenchmarkId(rs.getObject("benchmarkId", UUID.class)); // Native UUID
+            bm.setBenchmarkId(rs.getObject("benchmarkId", Integer.class));
             bm.setBenchmarkName(rs.getString("benchmarkName"));
             bm.setBenchmarkType(rs.getString("benchmarkType"));
 

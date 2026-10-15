@@ -5,8 +5,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @EqualsAndHashCode(callSuper = true)
 @Data
 @AllArgsConstructor
@@ -20,7 +18,7 @@ public class FundMaster extends BaseModel {
     private String investmentObjective;
     private String strategyNarrative;
     private String strategyType;
-    private UUID benchmarkId;
+    private Integer benchmarkId;
     private String benchmarkName;
     private String primaryTicker;
     private String accessionNumber;
