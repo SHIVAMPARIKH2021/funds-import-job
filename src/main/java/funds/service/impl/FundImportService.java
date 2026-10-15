@@ -3,8 +3,17 @@ package funds.service.impl;
 import ch.qos.logback.core.util.StringUtil;
 import funds.exception.InvalidParameterException;
 import funds.service.JobService;
-import org.springframework.batch.core.*;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.BatchStatus;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.batch.core.JobInstance;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.JobParametersInvalidException;
+import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.launch.NoSuchJobException;
 import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.repository.JobRestartException;
@@ -12,14 +21,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
+@Slf4j
 @Service("fundImportService")
 public class FundImportService implements JobService {
 
-    @Autowired
-    private JobLauncher jobLauncher;
-
-    @Autowired
-    private Job fundsImportJob;
+    private final JobLauncher jobLauncher;
+    private final Job fundsImportJob;
+    private final JobExplorer jobExplorer;
 
     @Value("${quarter:#{null}}")
     private String quarter;
@@ -33,24 +43,79 @@ public class FundImportService implements JobService {
     @Value("${dryrun:default}")
     private String dryRun;
 
+    @Value("${force:false}")
+    private boolean force;
+
+    @Autowired
+    public FundImportService(JobLauncher jobLauncher, Job fundsImportJob, JobExplorer jobExplorer) {
+        this.jobLauncher = jobLauncher;
+        this.fundsImportJob = fundsImportJob;
+        this.jobExplorer = jobExplorer;
+    }
+
     @Override
     public JobExecution processJob() throws InvalidParameterException, JobInstanceAlreadyCompleteException,
-            JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
+            JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException, NoSuchJobException {
+
         if (StringUtil.isNullOrEmpty(quarter)) {
-            throw new InvalidParameterException("[" + quarter +"]" + " quarter is invalid.");
+            throw new InvalidParameterException("[" + quarter + "] quarter is invalid.");
         }
         if (StringUtil.isNullOrEmpty(year)) {
-            throw new InvalidParameterException("[" + year +"]" + " quarter is invalid.");
+            throw new InvalidParameterException("[" + year + "] year is invalid.");
         }
+
+        String targetYear = year.trim();
+        String targetQuarter = quarter.trim();
+
+        // Check if an execution already completed successfully for this year and quarter
+        if (!force && isQuarterAlreadyCompleted(targetYear, targetQuarter)) {
+            String errorMsg = String.format(
+                    "Job execution aborted: A successful execution already exists for Year '%s' and Quarter '%s'. Set 'force=true' to override.",
+                    targetYear, targetQuarter
+            );
+            log.warn(errorMsg);
+            throw new JobInstanceAlreadyCompleteException(errorMsg);
+        }
+
+        String resolvedExecutor = (executor != null && !executor.isBlank()) ? executor.trim() : "System";
+
         JobParameters params = new JobParametersBuilder()
-                .addString("executor", (executor != null && !executor.isBlank()) ? executor : "System")
-                .addString("quarter", quarter)
-                .addString("year", year)
+                .addString("executor", resolvedExecutor)
+                .addString("quarter", targetQuarter)
+                .addString("year", targetYear)
                 .addLong("runId", System.currentTimeMillis())
-                //Optional parameter
                 .addString("dryrun", dryRun)
                 .toJobParameters();
 
         return jobLauncher.run(fundsImportJob, params);
+    }
+
+    private boolean isQuarterAlreadyCompleted(String targetYear, String targetQuarter) throws NoSuchJobException {
+        String jobName = fundsImportJob.getName();
+        int instanceCount = Math.toIntExact(jobExplorer.getJobInstanceCount(jobName));
+        if (instanceCount == 0) {
+            return false;
+        }
+
+        // Scan existing instances of this job
+        List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, Math.min(instanceCount, 100));
+
+        for (JobInstance instance : jobInstances) {
+            List<JobExecution> executions = jobExplorer.getJobExecutions(instance);
+            for (JobExecution execution : executions) {
+                if (execution.getStatus() == BatchStatus.COMPLETED) {
+                    JobParameters params = execution.getJobParameters();
+                    String execYear = params.getString("year");
+                    String execQuarter = params.getString("quarter");
+
+                    if (targetYear.equals(execYear) && targetQuarter.equals(execQuarter)) {
+                        log.info("Found completed run (JobExecutionId: {}) for Year: {}, Quarter: {}",
+                                execution.getId(), execYear, execQuarter);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }
