@@ -122,7 +122,7 @@ class FundImportServiceTest {
 
         ArgumentCaptor<JobParameters> parametersCaptor = ArgumentCaptor.forClass(JobParameters.class);
         verify(jobLauncher).run(eq(fundsImportJob), parametersCaptor.capture());
-        assertEquals("SYSTEM", parametersCaptor.getValue().getString("executor"));
+        assertEquals("System", parametersCaptor.getValue().getString("executor"));
     }
 
     @Test
@@ -135,7 +135,7 @@ class FundImportServiceTest {
 
         ArgumentCaptor<JobParameters> parametersCaptor = ArgumentCaptor.forClass(JobParameters.class);
         verify(jobLauncher).run(eq(fundsImportJob), parametersCaptor.capture());
-        assertEquals("SYSTEM", parametersCaptor.getValue().getString("executor"));
+        assertEquals("System", parametersCaptor.getValue().getString("executor"));
     }
 
     @Test
