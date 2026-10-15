@@ -109,6 +109,9 @@ pipeline {
                                     -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
                                     -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
                                     -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
+                                    -e YEAR='${params.YEAR}' \
+                                    -e QUARTER='${params.QUARTER}' \
+                                    -e EXECUTOR='${params.EXECUTOR}' \
                                     -e JAVA_OPTS='-Xms256m -Xmx1024m' \
                                     ${IMAGE_BASE_NAME}:${GIT_COMMIT_SHORT} \
                                     year=${params.YEAR} \
