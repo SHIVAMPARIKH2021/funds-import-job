@@ -43,7 +43,7 @@ public class FundImportService implements JobService {
             throw new InvalidParameterException("[" + year +"]" + " quarter is invalid.");
         }
         JobParameters params = new JobParametersBuilder()
-                .addString("executor", executor)
+                .addString("executor", (executor != null && !executor.isBlank()) ? executor : "System")
                 .addString("quarter", quarter)
                 .addString("year", year)
                 .addLong("runId", System.currentTimeMillis())
