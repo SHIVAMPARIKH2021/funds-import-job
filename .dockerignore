@@ -1,0 +1,14 @@
+# Keep the Docker build context small and stable (protects layer caching)
+.git
+.gitignore
+.gradle
+build
+.idea
+*.iml
+.vscode
+Dockerfile
+Jenkinsfile
+README.md
+ReadMe.md
+HELP.md
+docker-compose*.yml
