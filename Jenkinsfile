@@ -12,7 +12,8 @@ pipeline {
         choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
         string(name: 'EXECUTOR', defaultValue: 'System User', description: 'Audit tracking user')
         booleanParam(name: 'SKIP_BUILD', defaultValue: false, description: 'Skip testing and rebuilding; reuse existing image on Windows host')
-        booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host (ignored if SKIP_BUILD is checked)')
+        booleanParam(name: 'FORCE', defaultValue: false, description: 'Force re-run even if Year/Quarter was already processed')
+        booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host')
     }
 
     environment {
@@ -124,6 +125,7 @@ pipeline {
                                     -e QUARTER='${params.QUARTER}' \
                                     -e EXECUTOR='${params.EXECUTOR}' \
                                     -e JAVA_OPTS='-Xms256m -Xmx1024m' \
+                                    -e FORCE='${params.FORCE}' \
                                     ${targetImage}"
                         """
                     }
