@@ -113,10 +113,7 @@ pipeline {
                                     -e QUARTER='${params.QUARTER}' \
                                     -e EXECUTOR='${params.EXECUTOR}' \
                                     -e JAVA_OPTS='-Xms256m -Xmx1024m' \
-                                    ${IMAGE_BASE_NAME}:${GIT_COMMIT_SHORT} \
-                                    year=${params.YEAR} \
-                                    quarter=${params.QUARTER} \
-                                    executor='${params.EXECUTOR}'"
+                                    ${IMAGE_BASE_NAME}:${GIT_COMMIT_SHORT}"
                         """
                     }
                 }
