@@ -17,6 +17,7 @@ public class RawFundSource extends BaseModel {
         private Integer cik;
         private String accessionNumber;
         private LocalDate filingDate;
+        private String formType;
 
         // Core Fund Profile & Metadata
         private String ticker;

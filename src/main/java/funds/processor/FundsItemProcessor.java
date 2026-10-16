@@ -24,6 +24,7 @@ import java.util.regex.Pattern;
 @StepScope
 public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImportPayload> {
 
+    private static final String ANNUAL_CADENCE = "ANNUAL";
     private final String executor;
     private final String dryRun;
     private final AnalyticsRepository analyticsRepository;
@@ -80,9 +81,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             return null;
         }
 
-        String classifiedStrategy = evaluateStrategy(item.getDisclosureValue());
-
-        FundMaster fund = createBaseFundEntity(item, classifiedStrategy);
+        FundMaster fund = createBaseFundEntity(item);
 
         List<BenchmarkMaster> matchedBenchmarks = resolveBenchmarksForFund(item);
         List<FundBenchmarkAssociation> associations = new ArrayList<>();
@@ -111,8 +110,10 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         return new FundImportPayload(fund, associations);
     }
 
-    private FundMaster createBaseFundEntity(RawFundSource item, String classifiedStrategy) {
+    private FundMaster createBaseFundEntity(RawFundSource item) {
         FundMaster fund = new FundMaster();
+        String cadence = resolveReportingCadence(item.getFormType());
+        String classifiedStrategy = evaluateStrategy(item.getDisclosureValue());
         fund.setFundFamily(item.getFundFamily());
         // Use the fund name from the tag mapping if available; otherwise, fallback to the fund family
         fund.setFundName(this.fundNamesByTagMap.getOrDefault(item.getSeriesId().strip(), item.getFundFamily()));
@@ -123,7 +124,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         fund.setStrategyType(classifiedStrategy);
         fund.setCreatedBy(this.executor);
         fund.setUpdatedBy(this.executor);
-        fund.setReportingCadence("ANNUAL");
+        fund.setReportingCadence(cadence);
         fund.setHasDailyPricing(Boolean.TRUE);
         fund.setHasQuarterlyHoldings(Boolean.TRUE);
         resolveStrategyNarrativeAndInvestmentObjective(item, fund);
@@ -171,5 +172,18 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         return accessionNumber != null
                 ? this.benchmarksByAccessionMap.getOrDefault(accessionNumber, Collections.emptyList())
                 : Collections.emptyList();
+    }
+
+    private String resolveReportingCadence(String formType) {
+        if (formType == null || formType.isBlank()) {
+            return ANNUAL_CADENCE;
+        }
+        String normalized = formType.trim().toUpperCase();
+        if (normalized.startsWith("485") || normalized.contains("10-K")) {
+            return ANNUAL_CADENCE;
+        } else if (normalized.contains("497")) {
+            return "SUPPLEMENTAL";
+        }
+        return ANNUAL_CADENCE;
     }
 }

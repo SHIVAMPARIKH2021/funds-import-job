@@ -15,6 +15,7 @@
                 sub.filed as filingDate,
                 sub.cik,
                 sub.name as fundFamily,
+                sub.form AS formType,
                 ctm.symbol AS ticker,
                 ctm.class_id as classId,
                 td.series AS seriesId,
