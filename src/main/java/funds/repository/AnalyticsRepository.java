@@ -25,4 +25,8 @@ public interface AnalyticsRepository {
     void saveAllFunds(List<? extends FundMaster> items);
 
     void upsertFundBenchmarkAssociations(List<FundBenchmarkAssociation> associations);
+
+    Integer getOrCreateReportingQuarter(int year, int quarter, String executor);
+
+    void upsertQuarterFundAssociations(List<QuarterFundAssociation> associations);
 }

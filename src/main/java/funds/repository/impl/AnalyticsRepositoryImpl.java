@@ -1,12 +1,6 @@
 package funds.repository.impl;
 
-import funds.model.FundMaster;
-import funds.model.FundBenchmarkAssociation;
-import funds.model.BenchmarkMaster;
-import funds.model.BenchmarkCandidate;
-import funds.model.ComplianceRules;
-import funds.model.RawFundSource;
-import funds.model.RawBenchmarkSource;
+import funds.model.*;
 import funds.repository.AnalyticsRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
@@ -30,15 +24,15 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final String findActiveComplianceRules;
     private final String getRawFundData;
-    private final String findBenchmarkByName;
     private final String findAllBenchmarksByTags;
     private final String fetchBenchmarkProviderRules;
     private final String upsertBenchmarkMasterQuery;
-    private final String findAccessionNumberFromBenchmark;
     private final String findBenchmarksGroupedByAccession;
     private final String upsertFundMasterQuery;
     private final String findFundNamesByTagSql;
     private final String upsertFundBenchmarkAssociationQuery;
+    private final String upsertReportingQuarterSql;
+    private final String upsertQuarterFundAssociationSql;
 
 
     public AnalyticsRepositoryImpl(
@@ -54,21 +48,23 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
             @Qualifier("findBenchmarksGroupedByAccession") String findBenchmarksGroupedByAccession,
             @Qualifier("upsertFundMasterQuery") String upsertFundMasterQuery,
             @Qualifier("findFundNamesByTagSql") String findFundNamesByTagSql,
-            @Qualifier("upsertFundBenchmarkAssociationQuery") String upsertFundBenchmarkAssociationQuery) {
+            @Qualifier("upsertFundBenchmarkAssociationQuery") String upsertFundBenchmarkAssociationQuery,
+            @Qualifier("upsertReportingQuarterSql") String upsertReportingQuarterSql,
+            @Qualifier("upsertQuarterFundAssociationSql") String upsertQuarterFundAssociationSql) {
 
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
         this.findActiveComplianceRules = findActiveComplianceRules;
         this.getRawFundData = getRawFundData;
-        this.findBenchmarkByName = findBenchmarkByName;
         this.findAllBenchmarksByTags = findAllBenchmarksByTags;
         this.fetchBenchmarkProviderRules = fetchBenchmarkProviderRules;
         this.upsertBenchmarkMasterQuery = upsertBenchmarkMasterQuery;
-        this.findAccessionNumberFromBenchmark = findAccessionNumberFromBenchmark;
         this.findBenchmarksGroupedByAccession = findBenchmarksGroupedByAccession;
         this.upsertFundMasterQuery = upsertFundMasterQuery;
         this.findFundNamesByTagSql = findFundNamesByTagSql;
         this.upsertFundBenchmarkAssociationQuery = upsertFundBenchmarkAssociationQuery;
+        this.upsertReportingQuarterSql = upsertReportingQuarterSql;
+        this.upsertQuarterFundAssociationSql = upsertQuarterFundAssociationSql;
     }
 
     @Override
@@ -159,5 +155,33 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         }
         SqlParameterSource[] batch = SqlParameterSourceUtils.createBatch(associations.toArray());
         namedParameterJdbcTemplate.batchUpdate(this.upsertFundBenchmarkAssociationQuery, batch);
+    }
+
+    @Override
+    public Integer getOrCreateReportingQuarter(int year, int quarter, String executor) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("year", year)
+                .addValue("quarter", quarter)
+                .addValue("createdBy", executor);
+
+        // upsertReportingQuarterSql returns quarter_id directly via RETURNING clause
+        return namedParameterJdbcTemplate.queryForObject(
+                upsertReportingQuarterSql,
+                params,
+                Integer.class
+        );
+    }
+
+    @Override
+    public void upsertQuarterFundAssociations(List<QuarterFundAssociation> associations) {
+        SqlParameterSource[] batchParams = associations.stream()
+                .map(assoc -> new MapSqlParameterSource()
+                        .addValue("quarterId", assoc.getQuarterId())
+                        .addValue("seriesId", assoc.getSeriesId())
+                        .addValue("accessionNumber", assoc.getAccessionNumber())
+                        .addValue("createdBy", assoc.getCreatedBy()))
+                .toArray(SqlParameterSource[]::new);
+
+        namedParameterJdbcTemplate.batchUpdate(upsertQuarterFundAssociationSql, batchParams);
     }
 }
