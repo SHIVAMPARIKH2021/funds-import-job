@@ -13,8 +13,10 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -105,6 +107,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         benchmarkMaster.setBenchmarkProvider(matchedProvider);
         benchmarkMaster.setBenchmarkType(matchedType);
         benchmarkMaster.setCreatedBy(this.executor);
+        benchmarkMaster.setUpdatedBy(this.executor);
         benchmarkMaster.setAccessionNumber(benchmark.getAccessionNumber().trim());
 
         return benchmarkMaster;

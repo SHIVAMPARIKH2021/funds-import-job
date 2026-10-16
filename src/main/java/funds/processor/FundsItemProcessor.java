@@ -12,7 +12,11 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -20,12 +24,8 @@ import java.util.regex.Pattern;
 @StepScope
 public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImportPayload> {
 
-    @Value("#{jobParameters['executor']}")
-    private String executor;
-
-    @Value("#{jobParameters['dryrun'] ?: 'false'}")
-    private String dryRun;
-
+    private final String executor;
+    private final String dryRun;
     private final AnalyticsRepository analyticsRepository;
     private final Map<Integer, Pattern> complianceRuleMap = new HashMap<>();
     private List<ComplianceRules> complianceRules = Collections.emptyList();
@@ -35,8 +35,13 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     private Map<String, String> fundNamesByTagMap = Collections.emptyMap();
 
-    public FundsItemProcessor(AnalyticsRepository analyticsRepository) {
+    public FundsItemProcessor(AnalyticsRepository analyticsRepository,
+                              @Value("#{jobParameters['executor']}") String executor,
+                              @Value("#{jobParameters['dryrun']}") String dryRun
+                              ) {
         this.analyticsRepository = analyticsRepository;
+        this.executor = executor;
+        this.dryRun = dryRun;
     }
 
     @BeforeStep
@@ -66,7 +71,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
     }
 
     @Override
-    public FundImportPayload process(RawFundSource item) throws Exception {
+    public FundImportPayload process(RawFundSource item) {
         if (item == null || StringUtil.isNullOrEmpty(item.getSeriesId())) {
             return null; // Skip invalid records
         }
@@ -117,6 +122,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         fund.setPrimaryTicker(item.getTicker());
         fund.setStrategyType(classifiedStrategy);
         fund.setCreatedBy(this.executor);
+        fund.setUpdatedBy(this.executor);
         fund.setReportingCadence("ANNUAL");
         fund.setHasDailyPricing(Boolean.TRUE);
         fund.setHasQuarterlyHoldings(Boolean.TRUE);
