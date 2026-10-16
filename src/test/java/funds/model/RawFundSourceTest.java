@@ -26,13 +26,14 @@ class RawFundSourceTest {
         assertNull(source.getBenchmarkName());
         assertNull(source.getFilingQuarter());
         assertNull(source.getFilingYear());
+        assertNull(source.getFormType());
     }
 
     @Test
     void testAllArgsConstructor_SetsAllFieldsInDeclarationOrder() {
         RawFundSource source = new RawFundSource(
                 "TEST123", 1234567890, "ACC12345", LocalDate.of(2025, 1, 15),
-                "TEST", "CLASS_A", "Test Family",
+                "485APOS","TEST", "CLASS_A", "Test Family",
                 "Strategy narrative value", "STRATEGY_NARRATIVE_TEXT_BLOCK",
                 "Additional narrative", "S&P 500 Index", "Q1", 2025);
 
