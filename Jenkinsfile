@@ -10,7 +10,7 @@ pipeline {
     parameters {
         choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
         choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
-        string(name: 'EXECUTOR', defaultValue: 'System User', description: 'Audit tracking user')
+        string(name: 'EXECUTOR', defaultValue: 'System', description: 'Audit tracking user')
         booleanParam(name: 'SKIP_BUILD', defaultValue: false, description: 'Skip testing and rebuilding; reuse existing image on Windows host')
         booleanParam(name: 'FORCE', defaultValue: false, description: 'Force re-run even if Year/Quarter was already processed')
         booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host')

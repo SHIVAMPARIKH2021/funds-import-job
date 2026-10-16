@@ -28,8 +28,8 @@ public class FundsImportReader implements ItemReader<RawFundSource> {
     private Iterator<RawFundSource> fundIterator;
 
     public FundsImportReader(AnalyticsRepository analyticsRepository,
-                             @Value("#{jobParameters['year'] ?: environment['year'] ?: environment['YEAR']}") String year,
-                             @Value("#{jobParameters['quarter'] ?: environment['quarter'] ?: environment['QUARTER']}") String quarter) {
+                             @Value("#{jobParameters['year']") String year,
+                             @Value("#{jobParameters['quarter']") String quarter) {
         this.analyticsRepository = analyticsRepository;
         this.year = year;
         this.quarter = quarter;

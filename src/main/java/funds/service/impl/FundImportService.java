@@ -97,7 +97,7 @@ public class FundImportService implements JobService {
                 return false;
             }
 
-            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, Math.min(instanceCount, 100));
+            List<JobInstance> jobInstances = jobExplorer.getJobInstances(jobName, 0, instanceCount);
 
             for (JobInstance instance : jobInstances) {
                 List<JobExecution> executions = jobExplorer.getJobExecutions(instance);

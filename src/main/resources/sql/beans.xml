@@ -82,18 +82,23 @@
                     benchmark_provider,
                     benchmark_type,
                     created_by,
+                    updated_by,
                     created_at,
+                    updated_at,
                     accession_number
                 ) VALUES (
                     :benchmarkName,
                     :benchmarkProvider,
                     :benchmarkType,
                     :createdBy,
+                    NULL,
                     CURRENT_TIMESTAMP,
+                    NULL,
                     :accessionNumber
                 )
                 ON CONFLICT (benchmark_name) DO UPDATE SET
-                    updated_at = CURRENT_TIMESTAMP
+                    updated_at = CURRENT_TIMESTAMP,
+                    updated_by = :updatedBy
             ]]></value>
         </constructor-arg>
     </bean>
@@ -136,9 +141,9 @@
                 :hasDailyPricing,
                 :hasQuarterlyHoldings,
                 :createdBy,
-                :updatedBy,
+                NULL,
                 CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
+                NULL
             )
             ON CONFLICT (series_id) DO UPDATE SET
                 cik = COALESCE(EXCLUDED.cik, analytics.fund_master.cik),
@@ -154,15 +159,12 @@
                 reporting_cadence = COALESCE(EXCLUDED.reporting_cadence, analytics.fund_master.reporting_cadence),
                 has_daily_pricing = COALESCE(EXCLUDED.has_daily_pricing, analytics.fund_master.has_daily_pricing),
                 has_quarterly_holdings = COALESCE(EXCLUDED.has_quarterly_holdings, analytics.fund_master.has_quarterly_holdings),
-                updated_by = EXCLUDED.updated_by,
+                updated_by = :updatedBy,
                 updated_at = CURRENT_TIMESTAMP
             ]]></value>
         </constructor-arg>
     </bean>
 
-    <!-- ================================================================= -->
-    <!-- UPSERT FUND BENCHMARK ASSOCIATION (1:N bridge table)              -->
-    <!-- ================================================================= -->
     <bean id="upsertFundBenchmarkAssociationQuery" class="java.lang.String">
         <constructor-arg>
             <value><![CDATA[
