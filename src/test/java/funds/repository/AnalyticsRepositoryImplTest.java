@@ -54,6 +54,8 @@ class AnalyticsRepositoryImplTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         String findBenchmarksGroupedByAccession = "SELECT * FROM benchmark_master GROUP BY accession_number";
+        String upsertReportingQuarterSql = "INSERT INTO reporting_quarter";
+        String upsertQuarterFundAssociationSql = "INSERT INTO quarter_fund_association";
         analyticsRepositoryImpl = new AnalyticsRepositoryImpl(
                 jdbcTemplate,
                 namedParameterJdbcTemplate,
@@ -67,7 +69,9 @@ class AnalyticsRepositoryImplTest {
                 findBenchmarksGroupedByAccession,
                 upsertFundMasterQuery,
                 findFundNamesByTagSql,
-                upsertFundBenchmarkAssociationQuery);
+                upsertFundBenchmarkAssociationQuery,
+                upsertReportingQuarterSql,
+                upsertQuarterFundAssociationSql);
     }
 
     @Test

@@ -353,4 +353,63 @@
             </value>
         </constructor-arg>
     </bean>
+
+    <!-- Upsert analytics reporting quarter -->
+    <bean id="upsertReportingQuarterSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+            INSERT INTO analytics.reporting_quarter (
+                filing_year,
+                quarter,
+                is_active,
+                created_at,
+                created_by
+            ) VALUES (
+                :year,
+                :quarter,
+                TRUE,
+                CURRENT_TIMESTAMP,
+                :createdBy
+            )
+            ON CONFLICT (filing_year, quarter) DO UPDATE SET
+                updated_at = CURRENT_TIMESTAMP,
+                updated_by = :createdBy
+            RETURNING quarter_id;
+        ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <!-- Find quarter_id by year and quarter -->
+    <bean id="findQuarterIdSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+            SELECT quarter_id
+            FROM analytics.reporting_quarter
+            WHERE filing_year = :year AND quarter = :quarter;
+        ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <!-- Upsert fund quarterly association bridge -->
+    <bean id="upsertQuarterFundAssociationSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+            INSERT INTO analytics.quarter_fund_association (
+                quarter_id,
+                series_id,
+                accession_number,
+                created_at,
+                created_by
+            ) VALUES (
+                :quarterId,
+                :seriesId,
+                :accessionNumber,
+                CURRENT_TIMESTAMP,
+                :createdBy
+            )
+            ON CONFLICT (quarter_id, series_id) DO UPDATE SET
+                accession_number = EXCLUDED.accession_number;
+        ]]></value>
+        </constructor-arg>
+    </bean>
 </beans>
