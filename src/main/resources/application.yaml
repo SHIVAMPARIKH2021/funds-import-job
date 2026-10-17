@@ -18,6 +18,10 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: 5672
+    username: ${RABBITMQ_DEFAULT_USER}
+    password: ${RABBITMQ_DEFAULT_PASS}
     listener:
       simple:
         acknowledge-mode: auto
