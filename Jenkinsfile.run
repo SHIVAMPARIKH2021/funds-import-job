@@ -53,32 +53,35 @@ pipeline {
             steps {
                 script {
                     def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
-                    echo "Checking if ${targetImage} exists on ${env.WINDOWS_HOST}..."
+                    echo "Checking if ${targetImage} exists on Windows host ${env.WINDOWS_HOST}..."
 
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
-                        def imageExists = sh(
+                        // PowerShell-compatible exit code evaluation without POSIX separators
+                        def imageStatus = sh(
                             script: """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
                                     -o ConnectTimeout=15 \
                                     ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                    "docker image inspect ${targetImage} > /dev/null 2>&1 && echo 'EXISTS' || echo 'NOT_FOUND'"
+                                    "docker image inspect ${targetImage} 2>&1 >\$null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }"
                             """,
                             returnStdout: true
                         ).trim()
 
-                        if (imageExists != 'EXISTS') {
+                        echo "Probe result from host: ${imageStatus}"
+
+                        if (!imageStatus.contains('EXISTS')) {
                             error("""
                                 ==============================================================================
                                 [IMAGE NOT FOUND ERROR]
-                                Target image '${targetImage}' does not exist on host ${env.WINDOWS_HOST}.
-                                Please run the deployment pipeline ('funds-import-job-deploy') first
-                                to build and publish the image before executing this job.
+                                Target image '${targetImage}' does not exist on Windows host ${env.WINDOWS_HOST}.
+                                Run the deployment pipeline ('funds-import-job-deploy') first to build
+                                and bake the image before running this execution job.
                                 ==============================================================================
                             """)
                         }
 
-                        echo "Image '${targetImage}' verified successfully on target host."
+                        echo "Image '${targetImage}' confirmed present on target host."
                     }
                 }
             }
@@ -92,7 +95,6 @@ pipeline {
 
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
                         sh """
-                            set -e
                             ssh -i "\$SSH_KEY" \
                                 -o StrictHostKeyChecking=no \
                                 -o ConnectTimeout=15 \
