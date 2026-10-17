@@ -8,11 +8,8 @@ pipeline {
     }
 
     parameters {
-        choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
-        choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
-        string(name: 'EXECUTOR', defaultValue: 'System', description: 'Audit tracking user')
-        booleanParam(name: 'FORCE', defaultValue: false, description: 'Force re-run even if Year/Quarter was already processed')
-        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag to run (e.g., latest or git-sha)')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip local Gradle test execution prior to image baking')
+        booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host')
     }
 
     environment {
@@ -38,43 +35,62 @@ pipeline {
                     ).trim()
 
                     def secrets = readJSON text: response
-
-                    env.WINDOWS_HOST                = secrets.WINDOWS_HOST
-                    env.WINDOWS_USER                = secrets.WINDOWS_USER
-                    env.SPRING_DATASOURCE_URL       = secrets.SPRING_DATASOURCE_URL ?: "jdbc:postgresql://host.docker.internal:5432/funds?sslmode=disable"
-                    env.SPRING_DATASOURCE_USERNAME  = secrets.SPRING_DATASOURCE_USERNAME ?: secrets.DB_USER ?: "funds_admin"
-                    env.SPRING_DATASOURCE_PASSWORD  = secrets.SPRING_DATASOURCE_PASSWORD ?: secrets.DB_PASSWORD ?: "strong/?12x3401"
-                    env.BENCHMARK_REGEX             = secrets.BENCHMARK_REGEX ?: "\\s*\\(reflects no deduction for [^)]*\\)"
+                    env.WINDOWS_HOST = secrets.WINDOWS_HOST
+                    env.WINDOWS_USER = secrets.WINDOWS_USER
+                    echo "Target Windows deployment host: ${env.WINDOWS_HOST}"
                 }
             }
         }
 
-        stage('Execute Spring Batch Job in Container') {
+        stage('Checkout & Commit Resolution') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                    echo "Building and packaging commit: ${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+
+        stage('Run Unit & Integration Tests') {
+            when {
+                expression { return !params.SKIP_TESTS }
+            }
             steps {
                 script {
-                    def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
-                    echo "Executing batch container using pre-built image: ${targetImage}"
+                    sh '''
+                        chmod +x ./gradlew
+                        ./gradlew clean test --no-daemon --stacktrace
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'build/test-results/test/*.xml'
+                }
+            }
+        }
 
+        stage('Stream Context & Build Multi-Stage Docker Image on Windows') {
+            steps {
+                script {
+                    def noCacheFlag = params.FORCE_DOCKER_NO_CACHE ? "--no-cache" : ""
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
                         sh """
-                            set -e
-                            ssh -i "\$SSH_KEY" \
+                            tar -czf - \
+                                --exclude='.git' \
+                                --exclude='.gradle' \
+                                --exclude='build' \
+                                --exclude='.idea' . | ssh -i "\$SSH_KEY" \
                                 -o StrictHostKeyChecking=no \
                                 -o ConnectTimeout=15 \
                                 ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                "docker run --rm \
-                                    --add-host=host.docker.internal:host-gateway \
-                                    -e SPRING_PROFILES_ACTIVE=prod \
-                                    -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
-                                    -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
-                                    -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
-                                    -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
-                                    -e YEAR='${params.YEAR}' \
-                                    -e QUARTER='${params.QUARTER}' \
-                                    -e EXECUTOR='${params.EXECUTOR}' \
-                                    -e JAVA_OPTS='-Xms256m -Xmx1024m' \
-                                    -e FORCE='${params.FORCE}' \
-                                    ${targetImage}"
+                                "docker build ${noCacheFlag} \
+                                    -t ${IMAGE_BASE_NAME}:latest \
+                                    -t ${IMAGE_BASE_NAME}:${env.GIT_COMMIT_SHORT} -"
                         """
                     }
                 }
@@ -87,10 +103,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "Funds Import Job execution completed successfully for Year: ${params.YEAR}, Quarter: ${params.QUARTER}."
+            echo "Successfully built and tagged ${IMAGE_BASE_NAME}:latest on ${env.WINDOWS_HOST}"
         }
         failure {
-            echo "Funds Import Job execution failed. Inspect the logs above."
+            echo "funds-import-job deployment pipeline failed. Check console output above."
         }
     }
 }
