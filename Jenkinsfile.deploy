@@ -1,0 +1,96 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '15'))
+    }
+
+    parameters {
+        choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
+        choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
+        string(name: 'EXECUTOR', defaultValue: 'System', description: 'Audit tracking user')
+        booleanParam(name: 'FORCE', defaultValue: false, description: 'Force re-run even if Year/Quarter was already processed')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag to run (e.g., latest or git-sha)')
+    }
+
+    environment {
+        DOPPLER_TOKEN   = credentials('doppler-personal-token')
+        DOPPLER_PROJECT = 'sec-pipeline'
+        DOPPLER_CONFIG  = 'prd'
+        SSH_CREDS_ID    = 'windows-laptop-ssh'
+        IMAGE_BASE_NAME = 'funds-import-job'
+    }
+
+    stages {
+        stage('Fetch Secrets from Doppler Cloud') {
+            steps {
+                script {
+                    def response = sh(
+                        script: '''
+                            curl -s --request GET \
+                              --url "https://api.doppler.com/v3/configs/config/secrets/download?project=${DOPPLER_PROJECT}&config=${DOPPLER_CONFIG}&format=json" \
+                              --header "accept: application/json" \
+                              --header "authorization: Bearer ${DOPPLER_TOKEN}"
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    def secrets = readJSON text: response
+
+                    env.WINDOWS_HOST                = secrets.WINDOWS_HOST
+                    env.WINDOWS_USER                = secrets.WINDOWS_USER
+                    env.SPRING_DATASOURCE_URL       = secrets.SPRING_DATASOURCE_URL ?: "jdbc:postgresql://host.docker.internal:5432/funds?sslmode=disable"
+                    env.SPRING_DATASOURCE_USERNAME  = secrets.SPRING_DATASOURCE_USERNAME ?: secrets.DB_USER ?: "funds_admin"
+                    env.SPRING_DATASOURCE_PASSWORD  = secrets.SPRING_DATASOURCE_PASSWORD ?: secrets.DB_PASSWORD ?: "strong/?12x3401"
+                    env.BENCHMARK_REGEX             = secrets.BENCHMARK_REGEX ?: "\\s*\\(reflects no deduction for [^)]*\\)"
+                }
+            }
+        }
+
+        stage('Execute Spring Batch Job in Container') {
+            steps {
+                script {
+                    def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
+                    echo "Executing batch container using pre-built image: ${targetImage}"
+
+                    withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
+                        sh """
+                            set -e
+                            ssh -i "\$SSH_KEY" \
+                                -o StrictHostKeyChecking=no \
+                                -o ConnectTimeout=15 \
+                                ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                "docker run --rm \
+                                    --add-host=host.docker.internal:host-gateway \
+                                    -e SPRING_PROFILES_ACTIVE=prod \
+                                    -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
+                                    -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
+                                    -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
+                                    -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
+                                    -e YEAR='${params.YEAR}' \
+                                    -e QUARTER='${params.QUARTER}' \
+                                    -e EXECUTOR='${params.EXECUTOR}' \
+                                    -e JAVA_OPTS='-Xms256m -Xmx1024m' \
+                                    -e FORCE='${params.FORCE}' \
+                                    ${targetImage}"
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "Funds Import Job execution completed successfully for Year: ${params.YEAR}, Quarter: ${params.QUARTER}."
+        }
+        failure {
+            echo "Funds Import Job execution failed. Inspect the logs above."
+        }
+    }
+}
