@@ -50,42 +50,41 @@ pipeline {
         }
 
         stage('Verify Image Existence on Host') {
-            steps {
-                script {
-                    def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
-                    echo "Checking if ${targetImage} exists on Windows host ${env.WINDOWS_HOST}..."
+                steps {
+                    script {
+                        def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
+                        echo "Checking if ${targetImage} exists on Windows host ${env.WINDOWS_HOST}..."
 
-                    withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
-                        // PowerShell-compatible exit code evaluation without POSIX separators
-                        def imageStatus = sh(
-                            script: """
-                                ssh -i "\$SSH_KEY" \
-                                    -o StrictHostKeyChecking=no \
-                                    -o ConnectTimeout=15 \
-                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                    "docker image inspect ${targetImage} 2>&1 >\$null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }"
-                            """,
-                            returnStdout: true
-                        ).trim()
+                        withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
+                            def imageStatus = sh(
+                                script: """
+                                    ssh -i "\$SSH_KEY" \
+                                        -o StrictHostKeyChecking=no \
+                                        -o ConnectTimeout=15 \
+                                        ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                        "docker image inspect ${targetImage} | Out-Null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }"
+                                """,
+                                returnStdout: true
+                            ).trim()
 
-                        echo "Probe result from host: ${imageStatus}"
+                            echo "Probe result from host: ${imageStatus}"
 
-                        if (!imageStatus.contains('EXISTS')) {
-                            error("""
-                                ==============================================================================
-                                [IMAGE NOT FOUND ERROR]
-                                Target image '${targetImage}' does not exist on Windows host ${env.WINDOWS_HOST}.
-                                Run the deployment pipeline ('funds-import-job-deploy') first to build
-                                and bake the image before running this execution job.
-                                ==============================================================================
-                            """)
+                            if (!imageStatus.contains('EXISTS')) {
+                                error("""
+                                    ==============================================================================
+                                    [IMAGE NOT FOUND ERROR]
+                                    Target image '${targetImage}' does not exist on Windows host ${env.WINDOWS_HOST}.
+                                    Run the deployment pipeline ('funds-import-job-deploy') first to build
+                                    and bake the image before running this execution job.
+                                    ==============================================================================
+                                """)
+                            }
+
+                            echo "Image '${targetImage}' confirmed present on target host."
                         }
-
-                        echo "Image '${targetImage}' confirmed present on target host."
                     }
                 }
             }
-        }
 
         stage('Execute Spring Batch Job in Container') {
             steps {
