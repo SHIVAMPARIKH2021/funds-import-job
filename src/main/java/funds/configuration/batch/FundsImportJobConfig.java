@@ -1,4 +1,4 @@
-package funds.configuration;
+package funds.configuration.batch;
 
 import funds.model.FundImportPayload;
 import funds.model.RawFundSource;
