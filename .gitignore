@@ -40,3 +40,4 @@ out/
 doppler-secrets.json
 doppler-secrets.env
 .DS_Store
+.DS_Store
