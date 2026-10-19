@@ -6,7 +6,7 @@ import java.time.Instant;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record EtlCompletedEvent(
         String specVersion,
-        String eventId,
+        String jobId,
         String eventType,
         Instant timestamp,
         String source,
@@ -15,11 +15,11 @@ public record EtlCompletedEvent(
 ) {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record FundPayload(
-            int year,
-            int quarter,
-            String ticker,
-            boolean force,
-            int recordsProcessed,
+            String year,
+            String quarter,
+            boolean isTicker,
+            boolean isForcedImport,
+            Long recordsProcessed,
             String status
     ) {}
 }
