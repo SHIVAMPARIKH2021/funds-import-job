@@ -1,7 +1,9 @@
 package funds.service.impl;
 
 import ch.qos.logback.core.util.StringUtil;
+import funds.dto.EtlCompletedEvent;
 import funds.exception.InvalidParameterException;
+import funds.exception.NonRetryableContractException;
 import funds.service.JobService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
@@ -53,39 +55,77 @@ public class FundImportService implements JobService {
         this.jobExplorer = jobExplorer;
     }
 
+    /**
+     * CLI / Fallback Execution (reads from application properties)
+     */
     @Override
     public JobExecution processJob() throws InvalidParameterException, JobInstanceAlreadyCompleteException,
             JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
+        return execute(this.year, this.quarter, this.executor, this.force, null);
+    }
 
-        if (StringUtil.isNullOrEmpty(quarter)) {
-            throw new InvalidParameterException("[" + quarter + "] quarter is invalid.");
+    /**
+     * Event-Driven Execution (reads directly from RabbitMQ event)
+     */
+    @Override
+    public JobExecution processJob(EtlCompletedEvent event) throws InvalidParameterException, JobInstanceAlreadyCompleteException,
+            JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
+
+        if (event == null || event.payload() == null) {
+            throw new NonRetryableContractException("Payload cannot be null");
         }
-        if (StringUtil.isNullOrEmpty(year)) {
-            throw new InvalidParameterException("[" + year + "] year is invalid.");
+
+        String eventYear = event.payload().year();
+        String eventQuarter = event.payload().quarter();
+        String eventExecutor = (event.source() != null) ? event.source() : "fund-etl";
+        boolean eventForce = event.payload().isForcedImport();
+
+        return execute(eventYear, eventQuarter, eventExecutor, eventForce, event);
+    }
+
+    private JobExecution execute(String targetYear, String targetQuarter, String resolvedExecutor,
+                                 boolean isForce, EtlCompletedEvent event)
+            throws InvalidParameterException, JobInstanceAlreadyCompleteException,
+            JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
+
+        if (StringUtil.isNullOrEmpty(targetQuarter)) {
+            throw new InvalidParameterException("[" + targetQuarter + "] quarter is invalid.");
+        }
+        if (StringUtil.isNullOrEmpty(targetYear)) {
+            throw new InvalidParameterException("[" + targetYear + "] year is invalid.");
         }
 
-        String targetYear = year.trim();
-        String targetQuarter = quarter.trim();
+        targetYear = targetYear.trim();
+        targetQuarter = targetQuarter.trim();
 
-        if (!force && isQuarterAlreadyCompleted(targetYear, targetQuarter)) {
+        // Business rule: Deduplication check
+        if (!isForce && isQuarterAlreadyCompleted(targetYear, targetQuarter)) {
             String errorMsg = String.format(
                     "Job execution aborted: A successful execution already exists for Year '%s' and Quarter '%s'. Set 'force=true' to override.",
                     targetYear, targetQuarter
             );
             log.warn(errorMsg);
-            throw new JobInstanceAlreadyCompleteException(errorMsg);
+            // NonRetryable so it rejects to DLQ or stops without an endless retry loop
+            throw new NonRetryableContractException(errorMsg);
         }
 
-        String resolvedExecutor = (executor != null && !executor.isBlank()) ? executor.trim() : "System";
-
-        JobParameters params = new JobParametersBuilder()
+        JobParametersBuilder paramsBuilder = new JobParametersBuilder()
                 .addString("executor", resolvedExecutor)
                 .addString("quarter", targetQuarter)
                 .addString("year", targetYear)
-                .addLong("runId", System.currentTimeMillis())
                 .addString("dryrun", dryRun)
-                .toJobParameters();
+                .addLong("runId", System.currentTimeMillis());
 
+        // Append Event-specific metadata if triggered by RabbitMQ
+        if (event != null) {
+            paramsBuilder.addString("jobId", event.jobId())
+                    .addString("correlationId", event.correlationId() != null ? event.correlationId() : event.jobId())
+                    .addString("eventType", event.eventType())
+                    .addLong("recordsProcessed", event.payload().recordsProcessed() != null ? event.payload().recordsProcessed() : 0L);
+        }
+
+        JobParameters params = paramsBuilder.toJobParameters();
+        log.info("Launching {} with parameters: {}", fundsImportJob.getName(), params);
         return jobLauncher.run(fundsImportJob, params);
     }
 

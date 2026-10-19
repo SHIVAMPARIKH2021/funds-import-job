@@ -1,40 +1,49 @@
 package funds.listener;
 
+import ch.qos.logback.core.util.StringUtil;
+import funds.configuration.RabbitMqConfig;
 import funds.dto.EtlCompletedEvent;
+import funds.exception.NonRetryableContractException;
+import funds.service.JobService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobParametersBuilder;
-import org.springframework.batch.core.launch.JobLauncher;
-import org.springframework.stereotype.Service;
+import org.springframework.batch.core.BatchStatus;
+import org.springframework.batch.core.JobExecution;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 @Slf4j
-@Service
+@Component
 public class FundImportEventListener {
 
-    private final JobLauncher jobLauncher;
-    private final Job fundImportJob;
+    private final JobService fundImportService;
 
-    public FundImportEventListener(JobLauncher jobLauncher, Job fundImportJob) {
-        this.jobLauncher = jobLauncher;
-        this.fundImportJob = fundImportJob;
+    public FundImportEventListener(@Qualifier("fundImportService") JobService fundImportService) {
+        this.fundImportService = fundImportService;
     }
 
-    @RabbitListener(queues = "fund.import.trigger.queue")
-    public void onEtlCompleted(EtlCompletedEvent event) throws Exception {
-        log.info("Received event: {} | Correlation: {} | Target: Year {} Q{}",
-                event.eventId(), event.correlationId(), event.payload().year(), event.payload().quarter());
+    @RabbitListener(
+            queues = RabbitMqConfig.IMPORT_TRIGGER_QUEUE,
+            containerFactory = "importJobListenerContainerFactory"
+    )
+    public void onFundImportTrigger(EtlCompletedEvent event) throws Exception {
+        log.info("Received fund import trigger event: jobId={}, payload={}", event.jobId(), event.payload());
 
-        var params = new JobParametersBuilder()
-                .addLong("year", (long) event.payload().year())
-                .addLong("quarter", (long) event.payload().quarter())
-                .addString("force", String.valueOf(event.payload().force()))
-                .addString("correlationId", event.correlationId())
-                .addString("eventId", event.eventId())
-                .addLong("timestamp", System.currentTimeMillis()) // Assures unique execution instance
-                .toJobParameters();
+        // Contract validation: Fail fast without retry if required fields are missing
+        if (event.jobId() == null || event.jobId().isBlank()) {
+            throw new NonRetryableContractException("Payload validation failed: 'jobId' cannot be blank");
+        }
+        if (event.payload() == null || StringUtil.isNullOrEmpty(event.payload().quarter()) || StringUtil.isNullOrEmpty(event.payload().year())) {
+            throw new NonRetryableContractException("Unsupported dataset payload: " + event.payload());
+        }
 
-        jobLauncher.run(fundImportJob, params);
-        log.info("Spring Batch job completed successfully for event ID: {}", event.eventId());
+        // Delegate to service layer
+        JobExecution execution = fundImportService.processJob(event);
+
+        if (execution.getStatus() != BatchStatus.COMPLETED) {
+            throw new IllegalStateException("Batch job failed or stopped with status: " + execution.getStatus());
+        }
+
+        log.info("Spring Batch execution finished successfully for jobId={}", event.jobId());
     }
 }
