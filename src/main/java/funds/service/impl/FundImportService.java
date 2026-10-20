@@ -95,6 +95,8 @@ public class FundImportService implements JobService {
             throw new InvalidParameterException("[" + targetYear + "] year is invalid.");
         }
 
+        resolvedExecutor = (executor != null && !executor.isBlank()) ? executor.trim() : "System";
+
         targetYear = targetYear.trim();
         targetQuarter = targetQuarter.trim();
 
@@ -106,7 +108,7 @@ public class FundImportService implements JobService {
             );
             log.warn(errorMsg);
             // NonRetryable so it rejects to DLQ or stops without an endless retry loop
-            throw new NonRetryableContractException(errorMsg);
+            throw new JobInstanceAlreadyCompleteException(errorMsg);
         }
 
         JobParametersBuilder paramsBuilder = new JobParametersBuilder()

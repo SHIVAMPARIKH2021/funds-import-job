@@ -1,6 +1,8 @@
 package funds.service;
 
+import funds.dto.EtlCompletedEvent;
 import funds.exception.InvalidParameterException;
+import funds.exception.NonRetryableContractException;
 import funds.service.impl.FundImportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,7 @@ import org.springframework.batch.core.repository.JobExecutionAlreadyRunningExcep
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -182,6 +185,64 @@ class FundImportServiceTest {
         when(jobExplorer.getJobExecutions(instance)).thenReturn(List.of(completedExecution));
 
         assertThrows(JobInstanceAlreadyCompleteException.class, () -> fundImportService.processJob());
+        verifyNoInteractions(jobLauncher);
+    }
+
+    @Test
+    void testProcessJobWithEvent_WhenAlreadyCompleted_ThrowsException() throws Exception {
+        EtlCompletedEvent event = new EtlCompletedEvent(
+                "1.0",
+                "123abc",
+                "job.completed",
+                Instant.now(),
+                "fund-etl",
+                "id-1",
+                new EtlCompletedEvent.FundPayload(
+                        "2026",
+                        "1",
+                        false,
+                        1L,
+                        "",
+                        "Success"
+                )
+        );
+        ReflectionTestUtils.setField(fundImportService, "year", event.payload().year());
+        ReflectionTestUtils.setField(fundImportService, "quarter", event.payload().quarter());
+        ReflectionTestUtils.setField(fundImportService, "force", event.payload().isForcedImport());
+
+        JobInstance instance = new JobInstance(1L, "fundsImportJob");
+        JobExecution completedExecution = new JobExecution(10L, new JobParametersBuilder()
+                .addString("year", "2026")
+                .addString("quarter", "1")
+                .toJobParameters());
+        completedExecution.setStatus(BatchStatus.COMPLETED);
+
+        when(jobExplorer.getJobInstanceCount("fundsImportJob")).thenReturn(1L);
+        when(jobExplorer.getJobInstances("fundsImportJob", 0, 1)).thenReturn(List.of(instance));
+        when(jobExplorer.getJobExecutions(instance)).thenReturn(List.of(completedExecution));
+
+        assertThrows(JobInstanceAlreadyCompleteException.class, () -> fundImportService.processJob(event));
+        verifyNoInteractions(jobLauncher);
+    }
+
+    @Test
+    void testProcessJobWithNullEvent_WhenAlreadyCompleted_ThrowsException() throws Exception {
+        assertThrows(NonRetryableContractException.class, () -> fundImportService.processJob(null));
+        verifyNoInteractions(jobLauncher);
+    }
+
+    @Test
+    void testProcessJobWithNullEventPayload_WhenAlreadyCompleted_ThrowsException() throws Exception {
+        EtlCompletedEvent event = new EtlCompletedEvent(
+                "1.0",
+                "123abc",
+                "job.completed",
+                Instant.now(),
+                "fund-etl",
+                "id-1",
+                null
+        );
+        assertThrows(NonRetryableContractException.class, () -> fundImportService.processJob(event));
         verifyNoInteractions(jobLauncher);
     }
 }

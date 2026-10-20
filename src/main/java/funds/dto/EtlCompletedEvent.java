@@ -17,9 +17,9 @@ public record EtlCompletedEvent(
     public record FundPayload(
             String year,
             String quarter,
-            boolean isTicker,
             boolean isForcedImport,
             Long recordsProcessed,
+            String error,
             String status
     ) {}
 }
