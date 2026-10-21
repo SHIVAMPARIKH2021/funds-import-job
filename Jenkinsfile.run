@@ -13,10 +13,97 @@ pipeline {
             choices: ['DAEMON_LISTENER', 'MANUAL_BATCH'],
             description: 'DAEMON_LISTENER runs detached background RabbitMQ event consumer. MANUAL_BATCH runs one-off job with explicit Year/Quarter.'
         )
-        choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: '[MANUAL_BATCH ONLY] Target filing year')
-        choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: '[MANUAL_BATCH ONLY] Target filing quarter')
-        string(name: 'EXECUTOR', defaultValue: 'System', description: '[MANUAL_BATCH ONLY] Audit tracking user')
-        booleanParam(name: 'FORCE', defaultValue: false, description: '[MANUAL_BATCH ONLY] Force re-run even if Year/Quarter was already processed')
+
+        [
+            $class: 'DynamicReferenceParameter',
+            name: 'YEAR',
+            description: 'Target filing year',
+            referencedParameters: 'EXECUTION_MODE',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    sandbox: true,
+                    script: '''
+                        if (EXECUTION_MODE.equals("MANUAL_BATCH")) {
+                            return """<select name="value">
+                                        <option value="2026">2026</option>
+                                        <option value="2025">2025</option>
+                                        <option value="2024">2024</option>
+                                        <option value="2023">2023</option>
+                                      </select>"""
+                        } else {
+                            return "<i>Not applicable for DAEMON_LISTENER mode</i>"
+                        }
+                    '''
+                ]
+            ]
+        ]
+
+        [
+            $class: 'DynamicReferenceParameter',
+            name: 'QUARTER',
+            description: 'Target filing quarter',
+            referencedParameters: 'EXECUTION_MODE',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    sandbox: true,
+                    script: '''
+                        if (EXECUTION_MODE.equals("MANUAL_BATCH")) {
+                            return """<select name="value">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                      </select>"""
+                        } else {
+                            return "<i>Not applicable for DAEMON_LISTENER mode</i>"
+                        }
+                    '''
+                ]
+            ]
+        ]
+
+        [
+            $class: 'DynamicReferenceParameter',
+            name: 'EXECUTOR',
+            description: 'Audit tracking user',
+            referencedParameters: 'EXECUTION_MODE',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    sandbox: true,
+                    script: '''
+                        if (EXECUTION_MODE.equals("MANUAL_BATCH")) {
+                            return "<input name='value' value='System' class='setting-input' type='text'>"
+                        } else {
+                            return "<i>Not applicable for DAEMON_LISTENER mode</i>"
+                        }
+                    '''
+                ]
+            ]
+        ]
+
+        [
+            $class: 'DynamicReferenceParameter',
+            name: 'FORCE',
+            description: 'Force re-run even if Year/Quarter was already processed',
+            referencedParameters: 'EXECUTION_MODE',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    sandbox: true,
+                    script: '''
+                        if (EXECUTION_MODE.equals("MANUAL_BATCH")) {
+                            return "<input name='value' type='checkbox' value='true'>"
+                        } else {
+                            return "<i>Not applicable for DAEMON_LISTENER mode</i>"
+                        }
+                    '''
+                ]
+            ]
+        ]
+
         string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag to run (e.g., latest or specific git-sha)')
     }
 
@@ -126,7 +213,8 @@ pipeline {
                                         ${targetImage}"
                             """
                         } else {
-                            echo "Executing ${targetImage} in MANUAL_BATCH mode for ${params.YEAR} Q${params.QUARTER}..."
+                            def isForce = (params.FORCE == 'true' || params.FORCE == true)
+                            echo "Executing ${targetImage} in MANUAL_BATCH mode for ${params.YEAR} Q${params.QUARTER} (Force=${isForce})..."
                             sh """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
@@ -142,7 +230,7 @@ pipeline {
                                         -e YEAR='${params.YEAR}' \
                                         -e QUARTER='${params.QUARTER}' \
                                         -e EXECUTOR='${params.EXECUTOR}' \
-                                        -e FORCE='${params.FORCE}' \
+                                        -e FORCE='${isForce}' \
                                         -e JAVA_OPTS='-Xms256m -Xmx1024m' \
                                         ${targetImage}"
                             """
