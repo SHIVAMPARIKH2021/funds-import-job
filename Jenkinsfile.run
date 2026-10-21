@@ -8,10 +8,15 @@ pipeline {
     }
 
     parameters {
-        choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: 'Target filing year for the batch job')
-        choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: 'Target filing quarter for the batch job')
-        string(name: 'EXECUTOR', defaultValue: 'System', description: 'Audit tracking user')
-        booleanParam(name: 'FORCE', defaultValue: false, description: 'Force re-run even if Year/Quarter was already processed')
+        choice(
+            name: 'EXECUTION_MODE',
+            choices: ['DAEMON_LISTENER', 'MANUAL_BATCH'],
+            description: 'DAEMON_LISTENER runs detached background RabbitMQ event consumer. MANUAL_BATCH runs one-off job with explicit Year/Quarter.'
+        )
+        choice(name: 'YEAR', choices: ['2026', '2025', '2024', '2023'], description: '[MANUAL_BATCH ONLY] Target filing year')
+        choice(name: 'QUARTER', choices: ['1', '2', '3', '4'], description: '[MANUAL_BATCH ONLY] Target filing quarter')
+        string(name: 'EXECUTOR', defaultValue: 'System', description: '[MANUAL_BATCH ONLY] Audit tracking user')
+        booleanParam(name: 'FORCE', defaultValue: false, description: '[MANUAL_BATCH ONLY] Force re-run even if Year/Quarter was already processed')
         string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Image tag to run (e.g., latest or specific git-sha)')
     }
 
@@ -21,6 +26,7 @@ pipeline {
         DOPPLER_CONFIG  = 'prd'
         SSH_CREDS_ID    = 'windows-laptop-ssh'
         IMAGE_BASE_NAME = 'funds-import-job'
+        CONTAINER_NAME  = 'funds-import-job-worker'
     }
 
     stages {
@@ -45,73 +51,102 @@ pipeline {
                     env.SPRING_DATASOURCE_USERNAME  = secrets.SPRING_DATASOURCE_USERNAME ?: secrets.DB_USER ?: "funds_admin"
                     env.SPRING_DATASOURCE_PASSWORD  = secrets.SPRING_DATASOURCE_PASSWORD ?: secrets.DB_PASSWORD ?: "strong/?12x3401"
                     env.BENCHMARK_REGEX             = secrets.BENCHMARK_REGEX ?: "\\s*\\(reflects no deduction for [^)]*\\)"
+                    env.SPRING_RABBITMQ_HOST        = secrets.SPRING_RABBITMQ_HOST ?: secrets.RABBITMQ_HOST ?: "host.docker.internal"
+                    env.SPRING_RABBITMQ_PORT        = secrets.SPRING_RABBITMQ_PORT ?: secrets.RABBITMQ_PORT ?: "5672"
+                    env.SPRING_RABBITMQ_USERNAME    = secrets.SPRING_RABBITMQ_USERNAME ?: secrets.RABBITMQ_DEFAULT_USER ?: "guest"
+                    env.SPRING_RABBITMQ_PASSWORD    = secrets.SPRING_RABBITMQ_PASSWORD ?: secrets.RABBITMQ_DEFAULT_PASS ?: "guest"
                 }
             }
         }
 
         stage('Verify Image Existence on Host') {
-                steps {
-                    script {
-                        def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
-                        echo "Checking if ${targetImage} exists on Windows host ${env.WINDOWS_HOST}..."
-
-                        withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
-                            def imageStatus = sh(
-                                script: """
-                                    ssh -i "\$SSH_KEY" \
-                                        -o StrictHostKeyChecking=no \
-                                        -o ConnectTimeout=15 \
-                                        ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                        "docker image inspect ${targetImage} | Out-Null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }"
-                                """,
-                                returnStdout: true
-                            ).trim()
-
-                            echo "Probe result from host: ${imageStatus}"
-
-                            if (!imageStatus.contains('EXISTS')) {
-                                error("""
-                                    ==============================================================================
-                                    [IMAGE NOT FOUND ERROR]
-                                    Target image '${targetImage}' does not exist on Windows host ${env.WINDOWS_HOST}.
-                                    Run the deployment pipeline ('funds-import-job-deploy') first to build
-                                    and bake the image before running this execution job.
-                                    ==============================================================================
-                                """)
-                            }
-
-                            echo "Image '${targetImage}' confirmed present on target host."
-                        }
-                    }
-                }
-            }
-
-        stage('Execute Spring Batch Job in Container') {
             steps {
                 script {
                     def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
-                    echo "Executing batch container using pre-built image: ${targetImage}"
+                    echo "Checking if ${targetImage} exists on Windows host ${env.WINDOWS_HOST}..."
 
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
-                        sh """
-                            ssh -i "\$SSH_KEY" \
-                                -o StrictHostKeyChecking=no \
-                                -o ConnectTimeout=15 \
-                                ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                "docker run --rm \
-                                    --add-host=host.docker.internal:host-gateway \
-                                    -e SPRING_PROFILES_ACTIVE=prod \
-                                    -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
-                                    -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
-                                    -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
-                                    -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
-                                    -e YEAR='${params.YEAR}' \
-                                    -e QUARTER='${params.QUARTER}' \
-                                    -e EXECUTOR='${params.EXECUTOR}' \
-                                    -e JAVA_OPTS='-Xms256m -Xmx1024m' \
-                                    -e FORCE='${params.FORCE}' \
-                                    ${targetImage}"
-                        """
+                        def imageStatus = sh(
+                            script: """
+                                ssh -i "\$SSH_KEY" \
+                                    -o StrictHostKeyChecking=no \
+                                    -o ConnectTimeout=15 \
+                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                    "docker image inspect ${targetImage} >nul 2>&1 && echo EXISTS || echo NOT_FOUND"
+                            """,
+                            returnStdout: true
+                        ).trim()
+
+                        echo "Probe result from host: ${imageStatus}"
+
+                        if (!imageStatus.contains('EXISTS')) {
+                            error("""
+                                ==============================================================================
+                                [IMAGE NOT FOUND ERROR]
+                                Target image '${targetImage}' does not exist on Windows host ${env.WINDOWS_HOST}.
+                                Run deployment pipeline ('funds-import-job-deploy') first to bake the image.
+                                ==============================================================================
+                            """)
+                        }
+
+                        echo "Image '${targetImage}' confirmed present on target host."
+                    }
+                }
+            }
+        }
+
+        stage('Execute Spring Batch Container') {
+            steps {
+                script {
+                    def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG}"
+
+                    withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
+                        if (params.EXECUTION_MODE == 'DAEMON_LISTENER') {
+                            echo "Starting ${targetImage} in persistent DAEMON_LISTENER mode listening to RabbitMQ..."
+                            sh """
+                                ssh -i "\$SSH_KEY" \
+                                    -o StrictHostKeyChecking=no \
+                                    -o ConnectTimeout=15 \
+                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                    "docker rm -f ${CONTAINER_NAME} 2>nul || ver >nul && \
+                                     docker run -d \
+                                        --name ${CONTAINER_NAME} \
+                                        --restart unless-stopped \
+                                        --add-host=host.docker.internal:host-gateway \
+                                        -e SPRING_PROFILES_ACTIVE=prod \
+                                        -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
+                                        -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
+                                        -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
+                                        -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
+                                        -e SPRING_RABBITMQ_HOST='${SPRING_RABBITMQ_HOST}' \
+                                        -e SPRING_RABBITMQ_PORT='${SPRING_RABBITMQ_PORT}' \
+                                        -e SPRING_RABBITMQ_USERNAME='${SPRING_RABBITMQ_USERNAME}' \
+                                        -e SPRING_RABBITMQ_PASSWORD='${SPRING_RABBITMQ_PASSWORD}' \
+                                        -e JAVA_OPTS='-Xms256m -Xmx1024m' \
+                                        ${targetImage}"
+                            """
+                        } else {
+                            echo "Executing ${targetImage} in MANUAL_BATCH mode for ${params.YEAR} Q${params.QUARTER}..."
+                            sh """
+                                ssh -i "\$SSH_KEY" \
+                                    -o StrictHostKeyChecking=no \
+                                    -o ConnectTimeout=15 \
+                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                    "docker run --rm \
+                                        --add-host=host.docker.internal:host-gateway \
+                                        -e SPRING_PROFILES_ACTIVE=prod \
+                                        -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
+                                        -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
+                                        -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
+                                        -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
+                                        -e YEAR='${params.YEAR}' \
+                                        -e QUARTER='${params.QUARTER}' \
+                                        -e EXECUTOR='${params.EXECUTOR}' \
+                                        -e FORCE='${params.FORCE}' \
+                                        -e JAVA_OPTS='-Xms256m -Xmx1024m' \
+                                        ${targetImage}"
+                            """
+                        }
                     }
                 }
             }
@@ -123,10 +158,16 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "Funds Import Job execution completed successfully for Year: ${params.YEAR}, Quarter: ${params.QUARTER}."
+            script {
+                if (params.EXECUTION_MODE == 'DAEMON_LISTENER') {
+                    echo "Funds Import Job daemon is active and listening on RabbitMQ on ${env.WINDOWS_HOST}."
+                } else {
+                    echo "Funds Import Job manual execution completed successfully for Year: ${params.YEAR}, Quarter: ${params.QUARTER}."
+                }
+            }
         }
         failure {
-            echo "Funds Import Job execution failed. Inspect the logs above."
+            echo "Funds Import Job run failed. Inspect the logs above."
         }
     }
 }
