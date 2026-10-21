@@ -1,6 +1,7 @@
 package funds;
 
 import funds.service.JobService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -8,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.JobExecution;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.env.Environment;
 
 import java.util.Collections;
@@ -30,58 +32,56 @@ class ApplicationTest {
     @Mock
     private Environment environment;
 
-    @Test
-    @DisplayName("run should do nothing and stay idle when CLI properties are absent")
-    void testRun_WhenPropertiesNotPresent_DoesNotTriggerJob() throws Exception {
-        when(environment.containsProperty("year")).thenReturn(false);
+    private Application app;
 
-        Application app = new Application(Map.of("fundImportService", fundImportService), environment);
-        app.run();
-
-        verifyNoInteractions(fundImportService);
+    @BeforeEach
+    void setUp() {
+        app = new Application();
     }
 
     @Test
-    @DisplayName("run should execute processJob when year and quarter properties are present")
+    @DisplayName("manualBatchRunner should execute processJob when YEAR and QUARTER properties are present")
     void testRun_WhenPropertiesPresent_ExecutesJobSuccessfully() throws Exception {
-        when(environment.containsProperty("year")).thenReturn(true);
-        when(environment.containsProperty("quarter")).thenReturn(true);
+        when(environment.getProperty("YEAR")).thenReturn("2026");
+        when(environment.getProperty("QUARTER")).thenReturn("1");
 
         JobExecution jobExecution = mock(JobExecution.class);
         when(jobExecution.getExitStatus()).thenReturn(ExitStatus.COMPLETED);
         when(fundImportService.processJob()).thenReturn(jobExecution);
 
-        Application app = new Application(Map.of("fundImportService", fundImportService), environment);
-        assertDoesNotThrow(() -> app.run());
+        CommandLineRunner runner = app.manualBatchRunner(Map.of("fundImportService", fundImportService), environment);
+
+        assertDoesNotThrow(() -> runner.run());
 
         verify(fundImportService).processJob();
     }
 
     @Test
-    @DisplayName("run should throw IllegalStateException when fundImportService bean is missing from map")
+    @DisplayName("manualBatchRunner should throw IllegalStateException when fundImportService bean is missing from map")
     void testRun_WhenBeanNotFound_ThrowsIllegalStateException() {
-        when(environment.containsProperty("year")).thenReturn(true);
-        when(environment.containsProperty("quarter")).thenReturn(true);
+        when(environment.getProperty("YEAR")).thenReturn("2026");
+        when(environment.getProperty("QUARTER")).thenReturn("1");
 
-        Application app = new Application(Collections.emptyMap(), environment);
+        CommandLineRunner runner = app.manualBatchRunner(Collections.emptyMap(), environment);
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class, app::run);
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> runner.run());
         assertEquals("Could not find bean 'fundImportService'", ex.getMessage());
+        verifyNoInteractions(fundImportService);
     }
 
     @Test
-    @DisplayName("run should throw IllegalStateException when JobExecution does not exit with COMPLETED")
+    @DisplayName("manualBatchRunner should throw IllegalStateException when JobExecution does not exit with COMPLETED")
     void testRun_WhenJobExecutionFails_ThrowsIllegalStateException() throws Exception {
-        when(environment.containsProperty("year")).thenReturn(true);
-        when(environment.containsProperty("quarter")).thenReturn(true);
+        when(environment.getProperty("YEAR")).thenReturn("2026");
+        when(environment.getProperty("QUARTER")).thenReturn("1");
 
         JobExecution jobExecution = mock(JobExecution.class);
         when(jobExecution.getExitStatus()).thenReturn(ExitStatus.FAILED);
         when(fundImportService.processJob()).thenReturn(jobExecution);
 
-        Application app = new Application(Map.of("fundImportService", fundImportService), environment);
+        CommandLineRunner runner = app.manualBatchRunner(Map.of("fundImportService", fundImportService), environment);
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class, app::run);
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> runner.run());
         assertEquals("Job execution failed: exitCode=FAILED;exitDescription=", ex.getMessage());
         verify(fundImportService).processJob();
     }
