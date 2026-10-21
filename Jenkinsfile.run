@@ -153,16 +153,20 @@ pipeline {
                     echo "Checking if ${targetImage} exists on Windows host ${env.WINDOWS_HOST}..."
 
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
-                        def probeCommand = "powershell -NoProfile -Command \"docker image inspect ${targetImage} | Out-Null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }\""
-
-                        def imageStatus = sh(
-                            script: "ssh -i \"\$SSH_KEY\" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ${WINDOWS_USER}@${WINDOWS_HOST} '${probeCommand}'",
+                        def imageId = sh(
+                            script: """
+                                ssh -i "\$SSH_KEY" \
+                                    -o StrictHostKeyChecking=no \
+                                    -o ConnectTimeout=15 \
+                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                    "docker images -q ${targetImage}"
+                            """,
                             returnStdout: true
                         ).trim()
 
-                        echo "Probe result from host: ${imageStatus}"
+                        echo "Probe result (Image ID): '${imageId}'"
 
-                        if (!imageStatus.contains('EXISTS')) {
+                        if (!imageId) {
                             error("""
                                 ==============================================================================
                                 [IMAGE NOT FOUND ERROR]
@@ -172,7 +176,7 @@ pipeline {
                             """)
                         }
 
-                        echo "Image '${targetImage}' confirmed present on target host."
+                        echo "Image '${targetImage}' (ID: ${imageId}) confirmed present on target host."
                     }
                 }
             }
@@ -188,9 +192,35 @@ pipeline {
                         if (execMode == 'DAEMON_LISTENER') {
                             echo "Starting ${targetImage} in persistent DAEMON_LISTENER mode listening to RabbitMQ..."
 
-                            def daemonCommand = "powershell -NoProfile -Command \"docker rm -f ${CONTAINER_NAME} | Out-Null; docker run -d --name ${CONTAINER_NAME} --restart unless-stopped --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=prod -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' -e SPRING_RABBITMQ_HOST='${SPRING_RABBITMQ_HOST}' -e SPRING_RABBITMQ_PORT='${SPRING_RABBITMQ_PORT}' -e SPRING_RABBITMQ_USERNAME='${SPRING_RABBITMQ_USERNAME}' -e SPRING_RABBITMQ_PASSWORD='${SPRING_RABBITMQ_PASSWORD}' -e JAVA_OPTS='-Xms256m -Xmx1024m' ${targetImage}\""
+                            sh """
+                                ssh -i "\$SSH_KEY" \
+                                    -o StrictHostKeyChecking=no \
+                                    -o ConnectTimeout=15 \
+                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                    "docker rm -f ${CONTAINER_NAME} 2>nul || exit 0"
+                            """
 
-                            sh "ssh -i \"\$SSH_KEY\" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ${WINDOWS_USER}@${WINDOWS_HOST} '${daemonCommand}'"
+                            sh """
+                                ssh -i "\$SSH_KEY" \
+                                    -o StrictHostKeyChecking=no \
+                                    -o ConnectTimeout=15 \
+                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                    "docker run -d \
+                                        --name ${CONTAINER_NAME} \
+                                        --restart unless-stopped \
+                                        --add-host=host.docker.internal:host-gateway \
+                                        -e SPRING_PROFILES_ACTIVE=prod \
+                                        -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
+                                        -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
+                                        -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
+                                        -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
+                                        -e SPRING_RABBITMQ_HOST='${SPRING_RABBITMQ_HOST}' \
+                                        -e SPRING_RABBITMQ_PORT='${SPRING_RABBITMQ_PORT}' \
+                                        -e SPRING_RABBITMQ_USERNAME='${SPRING_RABBITMQ_USERNAME}' \
+                                        -e SPRING_RABBITMQ_PASSWORD='${SPRING_RABBITMQ_PASSWORD}' \
+                                        -e JAVA_OPTS='-Xms256m -Xmx1024m' \
+                                        ${targetImage}"
+                            """
                         } else {
                             def isForce = (params.FORCE == 'true' || params.FORCE == true)
                             def year = params.YEAR ?: '2026'
@@ -199,9 +229,25 @@ pipeline {
 
                             echo "Executing ${targetImage} in MANUAL_BATCH mode for ${year} Q${quarter} (Force=${isForce})..."
 
-                            def manualCommand = "docker run --rm --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=prod -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' -e YEAR='${year}' -e QUARTER='${quarter}' -e EXECUTOR='${executor}' -e FORCE='${isForce}' -e JAVA_OPTS='-Xms256m -Xmx1024m' ${targetImage}"
-
-                            sh "ssh -i \"\$SSH_KEY\" -o StrictHostKeyChecking=no -o ConnectTimeout=15 ${WINDOWS_USER}@${WINDOWS_HOST} '${manualCommand}'"
+                            sh """
+                                ssh -i "\$SSH_KEY" \
+                                    -o StrictHostKeyChecking=no \
+                                    -o ConnectTimeout=15 \
+                                    ${WINDOWS_USER}@${WINDOWS_HOST} \
+                                    "docker run --rm \
+                                        --add-host=host.docker.internal:host-gateway \
+                                        -e SPRING_PROFILES_ACTIVE=prod \
+                                        -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
+                                        -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
+                                        -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
+                                        -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
+                                        -e YEAR='${year}' \
+                                        -e QUARTER='${quarter}' \
+                                        -e EXECUTOR='${executor}' \
+                                        -e FORCE='${isForce}' \
+                                        -e JAVA_OPTS='-Xms256m -Xmx1024m' \
+                                        ${targetImage}"
+                            """
                         }
                     }
                 }
