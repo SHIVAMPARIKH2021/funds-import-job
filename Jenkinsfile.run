@@ -178,7 +178,7 @@ pipeline {
                                     -o StrictHostKeyChecking=no \
                                     -o ConnectTimeout=15 \
                                     ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                    "docker image inspect ${targetImage} >nul 2>&1 && echo EXISTS || echo NOT_FOUND"
+                                    "docker image inspect ${targetImage} *> \$null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }"
                             """,
                             returnStdout: true
                         ).trim()
@@ -215,7 +215,7 @@ pipeline {
                                     -o StrictHostKeyChecking=no \
                                     -o ConnectTimeout=15 \
                                     ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                    "docker rm -f ${CONTAINER_NAME} 2>nul || ver >nul && \
+                                    "docker rm -f ${CONTAINER_NAME} *> \$null; \
                                      docker run -d \
                                         --name ${CONTAINER_NAME} \
                                         --restart unless-stopped \
@@ -234,7 +234,7 @@ pipeline {
                             """
                         } else {
                             def isForce = (params.FORCE == 'true' || params.FORCE == true)
-                            def year = params.YEAR ?: '2023'
+                            def year = params.YEAR ?: '2026'
                             def quarter = params.QUARTER ?: '1'
                             def executor = params.EXECUTOR ?: 'System'
 
