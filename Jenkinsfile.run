@@ -14,9 +14,9 @@ pipeline {
             description: 'DAEMON_LISTENER runs background RabbitMQ consumer. MANUAL_BATCH runs one-off ad-hoc job.'
         )
 
-        reactiveReference(
+        activeChoiceHtml(
             name: 'YEAR',
-            choiceType: 'FORMATTED_HTML',
+            choiceType: 'ET_FORMATTED_HTML',
             referencedParameters: 'EXECUTION_MODE',
             script: groovyScript(
                 fallbackScript: [script: 'return ""', sandbox: true],
@@ -38,9 +38,9 @@ pipeline {
             )
         )
 
-        reactiveReference(
+        activeChoiceHtml(
             name: 'QUARTER',
-            choiceType: 'FORMATTED_HTML',
+            choiceType: 'ET_FORMATTED_HTML',
             referencedParameters: 'EXECUTION_MODE',
             script: groovyScript(
                 fallbackScript: [script: 'return ""', sandbox: true],
@@ -62,9 +62,9 @@ pipeline {
             )
         )
 
-        reactiveReference(
+        activeChoiceHtml(
             name: 'EXECUTOR',
-            choiceType: 'FORMATTED_HTML',
+            choiceType: 'ET_FORMATTED_HTML',
             referencedParameters: 'EXECUTION_MODE',
             script: groovyScript(
                 fallbackScript: [script: 'return ""', sandbox: true],
@@ -81,9 +81,9 @@ pipeline {
             )
         )
 
-        reactiveReference(
+        activeChoiceHtml(
             name: 'FORCE',
-            choiceType: 'FORMATTED_HTML',
+            choiceType: 'ET_FORMATTED_HTML',
             referencedParameters: 'EXECUTION_MODE',
             script: groovyScript(
                 fallbackScript: [script: 'return ""', sandbox: true],
