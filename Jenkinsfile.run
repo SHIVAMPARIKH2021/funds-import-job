@@ -169,7 +169,7 @@ pipeline {
             steps {
                 script {
                     def targetImage = "${IMAGE_BASE_NAME}:${params.IMAGE_TAG ?: 'latest'}"
-                    echo "Checking if ${targetImage} exists on Windows host ${env.WINDOWS_HOST}..."
+                    echo "Checking if ${targetImage} exists on Windows host${env.WINDOWS_HOST}..."
 
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
                         def imageStatus = sh(
@@ -178,7 +178,7 @@ pipeline {
                                     -o StrictHostKeyChecking=no \
                                     -o ConnectTimeout=15 \
                                     ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                    "docker image inspect ${targetImage} *> \$null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }"
+                                    "powershell -NoProfile -Command \\\"docker image inspect ${targetImage} | Out-Null; if (\\\$LASTEXITCODE -eq 0) { Write-Output 'EXISTS' } else { Write-Output 'NOT_FOUND' }\\\""
                             """,
                             returnStdout: true
                         ).trim()
@@ -189,7 +189,7 @@ pipeline {
                             error("""
                                 ==============================================================================
                                 [IMAGE NOT FOUND ERROR]
-                                Target image '${targetImage}' does not exist on Windows host ${env.WINDOWS_HOST}.
+                                Target image '${targetImage}' does not exist on Windows host${env.WINDOWS_HOST}.
                                 Run deployment pipeline ('funds-import-job-deploy') first to bake the image.
                                 ==============================================================================
                             """)
@@ -215,22 +215,7 @@ pipeline {
                                     -o StrictHostKeyChecking=no \
                                     -o ConnectTimeout=15 \
                                     ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                    "docker rm -f ${CONTAINER_NAME} *> \$null; \
-                                     docker run -d \
-                                        --name ${CONTAINER_NAME} \
-                                        --restart unless-stopped \
-                                        --add-host=host.docker.internal:host-gateway \
-                                        -e SPRING_PROFILES_ACTIVE=prod \
-                                        -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
-                                        -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
-                                        -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
-                                        -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
-                                        -e SPRING_RABBITMQ_HOST='${SPRING_RABBITMQ_HOST}' \
-                                        -e SPRING_RABBITMQ_PORT='${SPRING_RABBITMQ_PORT}' \
-                                        -e SPRING_RABBITMQ_USERNAME='${SPRING_RABBITMQ_USERNAME}' \
-                                        -e SPRING_RABBITMQ_PASSWORD='${SPRING_RABBITMQ_PASSWORD}' \
-                                        -e JAVA_OPTS='-Xms256m -Xmx1024m' \
-                                        ${targetImage}"
+                                    "powershell -NoProfile -Command \\\"docker rm -f ${CONTAINER_NAME} | Out-Null; docker run -d --name ${CONTAINER_NAME} --restart unless-stopped --add-host=host.docker.internal:host-gateway -e SPRING_PROFILES_ACTIVE=prod -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' -e SPRING_RABBITMQ_HOST='${SPRING_RABBITMQ_HOST}' -e SPRING_RABBITMQ_PORT='${SPRING_RABBITMQ_PORT}' -e SPRING_RABBITMQ_USERNAME='${SPRING_RABBITMQ_USERNAME}' -e SPRING_RABBITMQ_PASSWORD='${SPRING_RABBITMQ_PASSWORD}' -e JAVA_OPTS='-Xms256m -Xmx1024m'${targetImage}\\\""
                             """
                         } else {
                             def isForce = (params.FORCE == 'true' || params.FORCE == true)
@@ -238,7 +223,7 @@ pipeline {
                             def quarter = params.QUARTER ?: '1'
                             def executor = params.EXECUTOR ?: 'System'
 
-                            echo "Executing ${targetImage} in MANUAL_BATCH mode for ${year} Q${quarter} (Force=${isForce})..."
+                            echo "Executing ${targetImage} in MANUAL_BATCH mode for${year} Q${quarter} (Force=${isForce})..."
                             sh """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
@@ -267,20 +252,3 @@ pipeline {
 
     post {
         always {
-            cleanWs()
-        }
-        success {
-            script {
-                def execMode = params.EXECUTION_MODE ?: 'DAEMON_LISTENER'
-                if (execMode == 'DAEMON_LISTENER') {
-                    echo "Funds Import Job daemon is active and listening on RabbitMQ on ${env.WINDOWS_HOST}."
-                } else {
-                    echo "Funds Import Job manual execution completed successfully for Year: ${params.YEAR}, Quarter: ${params.QUARTER}."
-                }
-            }
-        }
-        failure {
-            echo "Funds Import Job run failed. Inspect the logs above."
-        }
-    }
-}
