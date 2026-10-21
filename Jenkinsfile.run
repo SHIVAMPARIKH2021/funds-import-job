@@ -190,9 +190,9 @@ pipeline {
 
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
                         if (execMode == 'DAEMON_LISTENER') {
-                            echo "Starting ${targetImage} in persistent DAEMON_LISTENER mode listening to RabbitMQ..."
+                            echo "Starting ${targetImage} in persistent DAEMON_LISTENER mode (profile: prod)..."
 
-                            // Safe container cleanup using PowerShell without shell operators
+                            // Safe container cleanup using PowerShell
                             sh """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
@@ -201,7 +201,7 @@ pipeline {
                                     "powershell -NoProfile -Command \\\"docker ps -aq -f name=^/${CONTAINER_NAME}\$ | ForEach-Object { docker rm -f \\\$_ }\\\""
                             """
 
-                            // Launch detached background daemon listener
+                            // Start background worker with 'prod' profile only (cli runner is excluded)
                             sh """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
@@ -229,8 +229,9 @@ pipeline {
                             def quarter = params.QUARTER ?: '1'
                             def executor = params.EXECUTOR ?: 'System'
 
-                            echo "Executing ${targetImage} in MANUAL_BATCH mode for ${year} Q${quarter} (Force=${isForce})..."
+                            echo "Executing ${targetImage} in MANUAL_BATCH mode (profiles: prod,cli) for ${year} Q${quarter} (Force=${isForce})..."
 
+                            // Activate both 'prod' and 'cli' profiles for ad-hoc execution
                             sh """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
@@ -238,7 +239,7 @@ pipeline {
                                     ${WINDOWS_USER}@${WINDOWS_HOST} \
                                     "docker run --rm \
                                         --add-host=host.docker.internal:host-gateway \
-                                        -e SPRING_PROFILES_ACTIVE=prod \
+                                        -e SPRING_PROFILES_ACTIVE=prod,cli \
                                         -e SPRING_DATASOURCE_URL=\\\"${SPRING_DATASOURCE_URL}\\\" \
                                         -e SPRING_DATASOURCE_USERNAME=\\\"${SPRING_DATASOURCE_USERNAME}\\\" \
                                         -e SPRING_DATASOURCE_PASSWORD=\\\"${SPRING_DATASOURCE_PASSWORD}\\\" \
