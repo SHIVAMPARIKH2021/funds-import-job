@@ -192,14 +192,16 @@ pipeline {
                         if (execMode == 'DAEMON_LISTENER') {
                             echo "Starting ${targetImage} in persistent DAEMON_LISTENER mode listening to RabbitMQ..."
 
+                            // Safe container cleanup using PowerShell without shell operators
                             sh """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
                                     -o ConnectTimeout=15 \
                                     ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                    "docker rm -f ${CONTAINER_NAME} 2>nul || exit 0"
+                                    "powershell -NoProfile -Command \\\"docker ps -aq -f name=^/${CONTAINER_NAME}\$ | ForEach-Object { docker rm -f \\\$_ }\\\""
                             """
 
+                            // Launch detached background daemon listener
                             sh """
                                 ssh -i "\$SSH_KEY" \
                                     -o StrictHostKeyChecking=no \
@@ -210,14 +212,14 @@ pipeline {
                                         --restart unless-stopped \
                                         --add-host=host.docker.internal:host-gateway \
                                         -e SPRING_PROFILES_ACTIVE=prod \
-                                        -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
-                                        -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
-                                        -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
-                                        -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
-                                        -e SPRING_RABBITMQ_HOST='${SPRING_RABBITMQ_HOST}' \
-                                        -e SPRING_RABBITMQ_PORT='${SPRING_RABBITMQ_PORT}' \
-                                        -e SPRING_RABBITMQ_USERNAME='${SPRING_RABBITMQ_USERNAME}' \
-                                        -e SPRING_RABBITMQ_PASSWORD='${SPRING_RABBITMQ_PASSWORD}' \
+                                        -e SPRING_DATASOURCE_URL=\\\"${SPRING_DATASOURCE_URL}\\\" \
+                                        -e SPRING_DATASOURCE_USERNAME=\\\"${SPRING_DATASOURCE_USERNAME}\\\" \
+                                        -e SPRING_DATASOURCE_PASSWORD=\\\"${SPRING_DATASOURCE_PASSWORD}\\\" \
+                                        -e BENCHMARK_REGEX=\\\"${BENCHMARK_REGEX}\\\" \
+                                        -e SPRING_RABBITMQ_HOST=\\\"${SPRING_RABBITMQ_HOST}\\\" \
+                                        -e SPRING_RABBITMQ_PORT=\\\"${SPRING_RABBITMQ_PORT}\\\" \
+                                        -e SPRING_RABBITMQ_USERNAME=\\\"${SPRING_RABBITMQ_USERNAME}\\\" \
+                                        -e SPRING_RABBITMQ_PASSWORD=\\\"${SPRING_RABBITMQ_PASSWORD}\\\" \
                                         -e JAVA_OPTS='-Xms256m -Xmx1024m' \
                                         ${targetImage}"
                             """
@@ -237,14 +239,14 @@ pipeline {
                                     "docker run --rm \
                                         --add-host=host.docker.internal:host-gateway \
                                         -e SPRING_PROFILES_ACTIVE=prod \
-                                        -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
-                                        -e SPRING_DATASOURCE_USERNAME='${SPRING_DATASOURCE_USERNAME}' \
-                                        -e SPRING_DATASOURCE_PASSWORD='${SPRING_DATASOURCE_PASSWORD}' \
-                                        -e BENCHMARK_REGEX='${BENCHMARK_REGEX}' \
-                                        -e YEAR='${year}' \
-                                        -e QUARTER='${quarter}' \
-                                        -e EXECUTOR='${executor}' \
-                                        -e FORCE='${isForce}' \
+                                        -e SPRING_DATASOURCE_URL=\\\"${SPRING_DATASOURCE_URL}\\\" \
+                                        -e SPRING_DATASOURCE_USERNAME=\\\"${SPRING_DATASOURCE_USERNAME}\\\" \
+                                        -e SPRING_DATASOURCE_PASSWORD=\\\"${SPRING_DATASOURCE_PASSWORD}\\\" \
+                                        -e BENCHMARK_REGEX=\\\"${BENCHMARK_REGEX}\\\" \
+                                        -e YEAR=\\\"${year}\\\" \
+                                        -e QUARTER=\\\"${quarter}\\\" \
+                                        -e EXECUTOR=\\\"${executor}\\\" \
+                                        -e FORCE=\\\"${isForce}\\\" \
                                         -e JAVA_OPTS='-Xms256m -Xmx1024m' \
                                         ${targetImage}"
                             """
