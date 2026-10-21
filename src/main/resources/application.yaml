@@ -21,7 +21,7 @@ spring:
     host: ${RABBITMQ_HOST}
     port: 5672
     username: ${RABBITMQ_DEFAULT_USER}
-    password: ${RABBITMQ_DEFAULT_PASS}
+    password: ${RABBITMQ_DEFAULT_PASSWORD}
     listener:
       simple:
         acknowledge-mode: auto
