@@ -8,8 +8,8 @@ pipeline {
     }
 
     parameters {
-        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip local Gradle test execution prior to image baking')
-        booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild layers from scratch on Windows host')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip local Gradle test execution prior to packaging')
+        booleanParam(name: 'FORCE_DOCKER_NO_CACHE', defaultValue: false, description: 'Force Docker to rebuild runtime layers from scratch on Windows host')
     }
 
     environment {
@@ -55,16 +55,14 @@ pipeline {
             }
         }
 
-        stage('Run Unit & Integration Tests') {
-            when {
-                expression { return !params.SKIP_TESTS }
-            }
+        stage('Compile, Test & Assemble Boot JAR') {
             steps {
                 script {
-                    sh '''
+                    def gradleCmd = params.SKIP_TESTS ? './gradlew clean bootJar -x test --no-daemon' : './gradlew clean test bootJar --no-daemon'
+                    sh """
                         chmod +x ./gradlew
-                        ./gradlew clean test --no-daemon --stacktrace
-                    '''
+                        ${gradleCmd}
+                    """
                 }
             }
             post {
@@ -74,21 +72,17 @@ pipeline {
             }
         }
 
-        stage('Stream Context & Build Multi-Stage Docker Image on Windows') {
+        stage('Stream Context & Build Docker Image on Windows') {
             steps {
                 script {
                     def noCacheFlag = params.FORCE_DOCKER_NO_CACHE ? "--no-cache" : ""
                     withCredentials([sshUserPrivateKey(credentialsId: env.SSH_CREDS_ID, keyFileVariable: 'SSH_KEY')]) {
                         sh """
-                            tar -czf - \
-                                --exclude='.git' \
-                                --exclude='.gradle' \
-                                --exclude='build' \
-                                --exclude='.idea' . | ssh -i "\$SSH_KEY" \
+                            tar -czf - Dockerfile build/libs | ssh -i "\$SSH_KEY" \
                                 -o StrictHostKeyChecking=no \
                                 -o ConnectTimeout=15 \
                                 ${WINDOWS_USER}@${WINDOWS_HOST} \
-                                "docker build ${noCacheFlag} \
+                                "docker build ${noCacheFlag} --progress=plain \
                                     -t ${IMAGE_BASE_NAME}:latest \
                                     -t ${IMAGE_BASE_NAME}:${env.GIT_COMMIT_SHORT} -"
                         """

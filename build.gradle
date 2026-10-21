@@ -45,3 +45,7 @@ jacocoTestReport {
         html.required = true
     }
 }
+
+tasks.named('jar') {
+    enabled = false
+}
