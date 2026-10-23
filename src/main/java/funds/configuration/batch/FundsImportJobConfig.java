@@ -6,7 +6,6 @@ import funds.model.RawBenchmarkSource;
 import funds.model.RawFundSource;
 import funds.processor.BenchmarkItemProcessor;
 import funds.processor.FundsItemProcessor;
-import funds.reader.BenchmarkItemReader;
 import funds.reader.FundsImportReader;
 import funds.reader.TextBenchmarkItemReader;
 import funds.tasklet.InitReportingQuarterTasklet;
@@ -30,7 +29,7 @@ public class FundsImportJobConfig {
     /**
      * Pipeline Execution Order:
      * Step 1: Seeds reporting_quarter calendar dimension.
-     * Step 2: Extracts benchmark candidates from numeric_facts + presentation_labels.
+     * Step 2: Extracts benchmark candidates from numeric_facts (defined in BenchmarkProviderConfig).
      * Step 3: Populates fund_master, benchmark associations, and quarterly cohorts.
      * Step 4: Fallback step: Resolves unmapped benchmarks from text_facts where fund_master.benchmark_id IS NULL.
      */
@@ -58,22 +57,6 @@ public class FundsImportJobConfig {
     ) {
         return new StepBuilder("initReportingQuarterStep", jobRepository)
                 .tasklet(initReportingQuarterTasklet, transactionManager)
-                .build();
-    }
-
-    @Bean
-    public Step benchmarkExtractionStep(
-            JobRepository jobRepository,
-            PlatformTransactionManager transactionManager,
-            BenchmarkItemReader numericBenchmarkReader,
-            BenchmarkItemProcessor benchmarkProcessor,
-            BenchmarkItemWriter benchmarkWriter
-    ) {
-        return new StepBuilder("benchmarkExtractionStep", jobRepository)
-                .<RawBenchmarkSource, BenchmarkMaster>chunk(CHUNK_SIZE, transactionManager)
-                .reader(numericBenchmarkReader)
-                .processor(benchmarkProcessor)
-                .writer(benchmarkWriter)
                 .build();
     }
 
