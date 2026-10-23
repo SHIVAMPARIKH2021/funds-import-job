@@ -16,10 +16,13 @@ public class TextBenchmarkItemReader implements ItemReader<RawBenchmarkSource> {
 
     private final AnalyticsRepository analyticsRepository;
     private Iterator<RawBenchmarkSource> iterator;
+
     private static final List<String> BENCHMARK_TAGS = List.of(
             Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
             Tags.INDEX_NO_DEDUCTION_FOR_FEES_EXPENSES_TAXES.getTag(),
-            Tags.PERFORMANCE_TABLE_NARRATIVE.getTag()
+            Tags.PERFORMANCE_TABLE_NARRATIVE_TEXT_BLOCK.getTag(),
+            Tags.PERFORMANCE_NARRATIVE_TEXT_BLOCK.getTag(),
+            Tags.PERFORMANCE_TABLE_HEADING.getTag()
     );
 
     public TextBenchmarkItemReader(AnalyticsRepository analyticsRepository) {
@@ -28,7 +31,6 @@ public class TextBenchmarkItemReader implements ItemReader<RawBenchmarkSource> {
 
     @Override
     public RawBenchmarkSource read() {
-
         if (iterator == null) {
             List<RawBenchmarkSource> unmapped = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(BENCHMARK_TAGS);
             this.iterator = unmapped != null ? unmapped.iterator() : List.<RawBenchmarkSource>of().iterator();

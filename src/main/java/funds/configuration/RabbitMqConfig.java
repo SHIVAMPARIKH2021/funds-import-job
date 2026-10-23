@@ -10,9 +10,11 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 import org.springframework.retry.support.RetryTemplate;
 
+@Profile("!cli")
 @Configuration
 public class RabbitMqConfig {
 

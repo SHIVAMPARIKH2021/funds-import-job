@@ -216,6 +216,45 @@
         </constructor-arg>
     </bean>
 
+    <!-- ================================================================= -->
+    <!-- FALLBACK STEP DECOUPLED QUERIES (NO CROSS-SCHEMA JOIN)            -->
+    <!-- ================================================================= -->
+
+    <!-- Query 1 (analytics schema): Unresolved funds missing primary benchmark -->
+    <bean id="findUnresolvedFundsMissingBenchmarkSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+                SELECT DISTINCT
+                    series_id AS seriesId,
+                    accession_number AS accessionNumber
+                FROM analytics.fund_master
+                WHERE benchmark_id IS NULL
+                  AND series_id IS NOT NULL;
+            ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <!-- Query 2 (sec_financials schema): Pure candidate text disclosures -->
+    <bean id="findTextBenchmarkDisclosuresSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+                SELECT DISTINCT
+                    td.adsh AS accessionNumber,
+                    td.series AS seriesId,
+                    td.tag AS rawMeasure,
+                    NULL AS terseLabel,
+                    td.value AS stdLabel,
+                    NULL AS verboseLabel
+                FROM sec_financials.text_disclosures td
+                WHERE td.tag IN (:benchmarkTags)
+                  AND td.series IS NOT NULL
+                  AND TRIM(td.series) != ''
+                  AND td.value IS NOT NULL
+                  AND TRIM(td.value) != '';
+            ]]></value>
+        </constructor-arg>
+    </bean>
+
     <bean id="findAllBenchmarksByTags" class="java.lang.String">
         <constructor-arg>
             <value>

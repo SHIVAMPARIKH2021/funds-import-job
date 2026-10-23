@@ -12,10 +12,7 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSourceUtils;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.ArrayList;
+import java.util.*;
 
 @Repository
 public class AnalyticsRepositoryImpl implements AnalyticsRepository {
@@ -33,6 +30,8 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     private final String upsertFundBenchmarkAssociationQuery;
     private final String upsertReportingQuarterSql;
     private final String upsertQuarterFundAssociationSql;
+    private final String findUnresolvedFundsMissingBenchmarkSql;
+    private final String findTextBenchmarkDisclosuresSql;
 
 
     public AnalyticsRepositoryImpl(
@@ -50,7 +49,9 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
             @Qualifier("findFundNamesByTagSql") String findFundNamesByTagSql,
             @Qualifier("upsertFundBenchmarkAssociationQuery") String upsertFundBenchmarkAssociationQuery,
             @Qualifier("upsertReportingQuarterSql") String upsertReportingQuarterSql,
-            @Qualifier("upsertQuarterFundAssociationSql") String upsertQuarterFundAssociationSql) {
+            @Qualifier("upsertQuarterFundAssociationSql") String upsertQuarterFundAssociationSql,
+            @Qualifier("findUnresolvedFundsMissingBenchmarkSql") String findUnresolvedFundsMissingBenchmarkSql,
+            @Qualifier("findTextBenchmarkDisclosuresSql") String findTextBenchmarkDisclosuresSql) {
 
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
@@ -65,6 +66,8 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.upsertFundBenchmarkAssociationQuery = upsertFundBenchmarkAssociationQuery;
         this.upsertReportingQuarterSql = upsertReportingQuarterSql;
         this.upsertQuarterFundAssociationSql = upsertQuarterFundAssociationSql;
+        this.findUnresolvedFundsMissingBenchmarkSql = findUnresolvedFundsMissingBenchmarkSql;
+        this.findTextBenchmarkDisclosuresSql = findTextBenchmarkDisclosuresSql;
     }
 
     @Override
@@ -187,8 +190,31 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
 
     @Override
     public List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> includedTags) {
+        // Query 1: Query analytics schema for unresolved series
+        List<String> unresolvedSeries = jdbcTemplate.query(
+                findUnresolvedFundsMissingBenchmarkSql,
+                (rs, rowNum) -> rs.getString("seriesId")
+        );
+
+        if (unresolvedSeries.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        java.util.Set<String> unresolvedSeriesSet = new java.util.HashSet<>(unresolvedSeries);
+
+        // Query 2: Query sec_financials schema for text disclosures
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("benchmarkTags", includedTags);
-        return namedParameterJdbcTemplate.query(findAllBenchmarksByTags, params, new BeanPropertyRowMapper<>(RawBenchmarkSource.class));
+
+        List<RawBenchmarkSource> disclosures = namedParameterJdbcTemplate.query(
+                findTextBenchmarkDisclosuresSql,
+                params,
+                new BeanPropertyRowMapper<>(RawBenchmarkSource.class)
+        );
+
+        // Filter: Keep disclosures that match unresolved funds
+        return disclosures.stream()
+                .filter(d -> d.getSeriesId() != null && unresolvedSeriesSet.contains(d.getSeriesId()))
+                .toList();
     }
 }

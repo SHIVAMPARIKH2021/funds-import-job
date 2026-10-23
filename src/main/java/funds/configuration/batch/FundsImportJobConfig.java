@@ -1,15 +1,10 @@
 package funds.configuration.batch;
 
-import funds.model.BenchmarkMaster;
 import funds.model.FundImportPayload;
-import funds.model.RawBenchmarkSource;
 import funds.model.RawFundSource;
-import funds.processor.BenchmarkItemProcessor;
 import funds.processor.FundsItemProcessor;
 import funds.reader.FundsImportReader;
-import funds.reader.TextBenchmarkItemReader;
 import funds.tasklet.InitReportingQuarterTasklet;
-import funds.writer.BenchmarkItemWriter;
 import funds.writer.FundsItemWriter;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -73,22 +68,6 @@ public class FundsImportJobConfig {
                 .reader(fundsImportReader)
                 .processor(fundsItemProcessor)
                 .writer(fundsItemWriter)
-                .build();
-    }
-
-    @Bean
-    public Step textBenchmarkFallbackStep(
-            JobRepository jobRepository,
-            PlatformTransactionManager transactionManager,
-            TextBenchmarkItemReader textReader,
-            BenchmarkItemProcessor benchmarkProcessor,
-            BenchmarkItemWriter benchmarkWriter
-    ) {
-        return new StepBuilder("textBenchmarkFallbackStep", jobRepository)
-                .<RawBenchmarkSource, BenchmarkMaster>chunk(CHUNK_SIZE, transactionManager)
-                .reader(textReader)
-                .processor(benchmarkProcessor)
-                .writer(benchmarkWriter)
                 .build();
     }
 }
