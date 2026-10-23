@@ -184,4 +184,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
 
         namedParameterJdbcTemplate.batchUpdate(upsertQuarterFundAssociationSql, batchParams);
     }
+
+    @Override
+    public List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> includedTags) {
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("benchmarkTags", includedTags);
+        return namedParameterJdbcTemplate.query(findAllBenchmarksByTags, params, new BeanPropertyRowMapper<>(RawBenchmarkSource.class));
+    }
 }

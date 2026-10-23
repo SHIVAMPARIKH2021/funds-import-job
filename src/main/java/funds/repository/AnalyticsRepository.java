@@ -29,4 +29,6 @@ public interface AnalyticsRepository {
     Integer getOrCreateReportingQuarter(int year, int quarter, String executor);
 
     void upsertQuarterFundAssociations(List<QuarterFundAssociation> associations);
+
+    List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> includedTags);
 }

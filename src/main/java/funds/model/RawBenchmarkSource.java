@@ -10,6 +10,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class RawBenchmarkSource extends BaseModel{
-    private String benchmarkName;
     private String accessionNumber;
+    private String seriesId;
+    private String rawMeasure;
+    private String terseLabel;
+    private String stdLabel;
+    private String verboseLabel;
 }
