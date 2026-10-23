@@ -56,7 +56,7 @@ class BenchmarkItemProcessorTest {
 
     private RawBenchmarkSource source(String benchmarkName, String accessionNumber) {
         RawBenchmarkSource source = new RawBenchmarkSource();
-        source.setBenchmarkName(benchmarkName);
+        source.setStdLabel(benchmarkName);
         source.setAccessionNumber(accessionNumber);
         return source;
     }

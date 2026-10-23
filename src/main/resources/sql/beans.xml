@@ -221,24 +221,47 @@
             <value>
                 <![CDATA[
                 SELECT DISTINCT
-                    COALESCE(
-                    NULLIF(TRIM(pl.terse), ''),
-                    NULLIF(TRIM(pl.std), ''),
-                    NULLIF(TRIM(pl.verbose), ''),
-                    nf.measure
-                    ) AS benchmarkName,
-                nf.adsh AS accessionNumber
+                    nf.adsh AS accessionNumber,
+                    nf.series AS seriesId,
+                    nf.measure AS rawMeasure,
+                    pl.terse AS terseLabel,
+                    pl.std AS stdLabel,
+                    pl.verbose AS verboseLabel
                 FROM sec_financials.numeric_facts nf
-                  LEFT JOIN sec_financials.presentation_labels pl
-                  ON nf.adsh = pl.adsh
-                  AND (
-                  pl.tag = nf.measure
-                  OR pl.tag = CONCAT(nf.measure, 'Member')
-                  )
+                LEFT JOIN sec_financials.presentation_labels pl
+                    ON nf.adsh = pl.adsh
+                    AND (
+                        pl.tag = nf.measure
+                        OR pl.tag = CONCAT(nf.measure, 'Member')
+                    )
                 WHERE nf.tag IN (:benchmarkTags)
-                  AND (nf.class IS NULL OR TRIM(nf.class) = '')
-                  AND nf.measure IS NOT NULL
-                  AND TRIM(nf.measure) NOT IN (:excludedBenchmarks);
+                    AND nf.series IS NOT NULL
+                    AND TRIM(nf.series) != ''
+                    AND nf.measure IS NOT NULL
+                    AND TRIM(nf.measure) != ''
+                    AND TRIM(nf.measure) NOT IN (:excludedBenchmarks);
+                ]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findUnresolvedBenchmarksFromTextFacts" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                SELECT DISTINCT
+                    tf.adsh AS accessionNumber,
+                    tf.series AS seriesId,
+                    tf.tag AS rawMeasure,
+                    tf.text AS stdLabel
+                FROM sec_financials.text_facts tf
+                INNER JOIN sec_financials.fund_master fm
+                    ON fm.adsh = tf.adsh
+                    AND fm.series_id = tf.series
+                WHERE fm.benchmark_id IS NULL
+                    AND tf.tag IN (:benchmarkTags)
+                    AND tf.text IS NOT NULL
+                    AND TRIM(tf.text) != '';
                 ]]>
             </value>
         </constructor-arg>

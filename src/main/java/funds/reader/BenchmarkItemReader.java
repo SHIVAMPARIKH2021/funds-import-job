@@ -26,13 +26,23 @@ public class BenchmarkItemReader implements ItemReader<RawBenchmarkSource> {
             Tags.AVERAGE_ANNUAL_RETURN_TWENTY_FIVE_YEAR.getTag(),
             Tags.AVERAGE_ANNUAL_RETURN_INCEPTION.getTag(),
             Tags.AVERAGE_ANNUAL_RETURN_INCEPTION_ONE.getTag(),
-            Tags.AVERAGE_ANNUAL_RETURN_INCEPTION_TWO.getTag()
+            Tags.AVERAGE_ANNUAL_RETURN_INCEPTION_TWO.getTag(),
+            Tags.ANNUAL_RETURN_YEAR_01.getTag(),
+            Tags.ANNUAL_RETURN_YEAR_05.getTag(),
+            Tags.ANNUAL_RETURN_YEAR_10.getTag()
     );
 
     private static final List<String> EXCLUDED_TAGS = List.of(
             Tags.RETURN_BEFORE_TAXES.getTag(),
+            Tags.RETURN_BEFORE_TAXES_MEMBER.getTag(),
             Tags.AFTER_TAXES_ON_DISTRIBUTIONS.getTag(),
-            Tags.AFTER_TAXES_ON_DISTRIBUTIONS_AND_SALES.getTag()
+            Tags.AFTER_TAXES_ON_DISTRIBUTIONS_MEMBER.getTag(),
+            Tags.AFTER_TAXES_ON_DISTRIBUTIONS_AND_SALES.getTag(),
+            Tags.AFTER_TAXES_ON_DISTRIBUTIONS_AND_SALES_MEMBER.getTag(),
+            Tags.AFTER_TAX_ON_DISTRIBUTIONS_LOWER.getTag(),
+            Tags.AFTER_TAX_ON_DISTRIBUTIONS_LOWER_MEMBER.getTag(),
+            Tags.AFTER_TAX_ON_DISTRIBUTIONS_AND_SALES_LOWER.getTag(),
+            Tags.AFTER_TAX_ON_DISTRIBUTIONS_AND_SALES_LOWER_MEMBER.getTag()
     );
 
     public BenchmarkItemReader(AnalyticsRepository analyticsRepository) {

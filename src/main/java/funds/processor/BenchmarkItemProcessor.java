@@ -14,9 +14,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -33,9 +34,13 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
     private List<BenchmarkCandidate> rules = Collections.emptyList();
     private final Map<Integer, Pattern> patternCache = new HashMap<>();
 
+    // Strip terminal Member or [Member] variations in pure Java
+    private static final Pattern MEMBER_SUFFIX_PATTERN =
+            Pattern.compile("(?i)(\\s*\\[Member\\]|Member)$");
+
     public BenchmarkItemProcessor(
             AnalyticsRepository analyticsRepository,
-            @Value("${benchmark.regex}") String benchmarkRegex,
+            @Value("${benchmark.regex:}") String benchmarkRegex,
             @Value("#{jobParameters['executor']}") String executor
     ) {
         this.analyticsRepository = analyticsRepository;
@@ -45,15 +50,17 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
 
     @BeforeStep
     public void setup(StepExecution stepExecution) {
-        // 1. Compile boilerplate cleanup regex once
         try {
-            this.boilerplatePattern = Pattern.compile(this.benchmarkRegex, Pattern.CASE_INSENSITIVE);
+            if (benchmarkRegex != null && !benchmarkRegex.isBlank()) {
+                this.boilerplatePattern = Pattern.compile(this.benchmarkRegex, Pattern.CASE_INSENSITIVE);
+            } else {
+                this.boilerplatePattern = Pattern.compile("\\s*\\(reflects no deduction for [^)]*\\)", Pattern.CASE_INSENSITIVE);
+            }
         } catch (PatternSyntaxException pse) {
             log.error("Invalid benchmark.regex property [{}]. Defaulting to standard SEC cleaner.", this.benchmarkRegex, pse);
             this.boilerplatePattern = Pattern.compile("\\s*\\(reflects no deduction for [^)]*\\)", Pattern.CASE_INSENSITIVE);
         }
 
-        // 2. Assign directly to the instance field (avoid local variable shadowing)
         this.rules = analyticsRepository.fetchBenchmarkProviderRules();
         this.patternCache.clear();
 
@@ -73,23 +80,40 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             }
         }
 
-        log.info("Initialized {} benchmark provider rules ({} patterns compiled successfully) for step '{}'",
-                this.rules != null ? this.rules.size() : 0, this.patternCache.size(), stepExecution.getStepName());
+        log.info("Initialized {} benchmark provider rules for step '{}'",
+                this.rules != null ? this.rules.size() : 0, stepExecution.getStepName());
     }
 
     @Override
-    public BenchmarkMaster process(RawBenchmarkSource benchmark) {
-        if (StringUtil.isNullOrEmpty(benchmark.getBenchmarkName())) {
-            return null; // Skip invalid records
+    public BenchmarkMaster process(RawBenchmarkSource source) {
+        if (source == null) {
+            return null;
         }
 
-        // 1. Clean boilerplate text using the pre-compiled pattern
-        String cleaned = this.boilerplatePattern.matcher(benchmark.getBenchmarkName()).replaceAll("").trim();
+        // 1. Resolve raw candidate via Java fallback precedence
+        Optional<String> candidateOpt = extractCandidate(source);
+        if (candidateOpt.isEmpty()) {
+            return null;
+        }
+
+        String rawCandidate = candidateOpt.get();
+
+        // 2. Filter out non-benchmark measure strings in Java
+        String lower = rawCandidate.toLowerCase();
+        if (lower.contains("aftertax") || lower.contains("returnbeforetax")) {
+            return null;
+        }
+
+        // 3. Strip trailing "[Member]" or "Member"
+        String stripped = MEMBER_SUFFIX_PATTERN.matcher(rawCandidate).replaceAll("").trim();
+
+        // 4. Clean boilerplate text (e.g. "(reflects no deduction for fees...")
+        String cleaned = this.boilerplatePattern.matcher(stripped).replaceAll("").trim();
         if (cleaned.isBlank()) {
             return null;
         }
 
-        // 2. Evaluate against compiled regex rules by priority
+        // 5. Categorize Provider and Type via rules table
         String matchedProvider = "Other / Self-Indexed";
         String matchedType = "Category / Secondary";
 
@@ -108,8 +132,24 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         benchmarkMaster.setBenchmarkType(matchedType);
         benchmarkMaster.setCreatedBy(this.executor);
         benchmarkMaster.setUpdatedBy(this.executor);
-        benchmarkMaster.setAccessionNumber(benchmark.getAccessionNumber().trim());
+        benchmarkMaster.setAccessionNumber(source.getAccessionNumber() != null ? source.getAccessionNumber().trim() : null);
 
         return benchmarkMaster;
+    }
+
+    private Optional<String> extractCandidate(RawBenchmarkSource source) {
+        if (!StringUtil.isNullOrEmpty(source.getTerseLabel())) {
+            return Optional.of(source.getTerseLabel().trim());
+        }
+        if (!StringUtil.isNullOrEmpty(source.getStdLabel())) {
+            return Optional.of(source.getStdLabel().trim());
+        }
+        if (!StringUtil.isNullOrEmpty(source.getVerboseLabel())) {
+            return Optional.of(source.getVerboseLabel().trim());
+        }
+        if (!StringUtil.isNullOrEmpty(source.getRawMeasure())) {
+            return Optional.of(source.getRawMeasure().trim());
+        }
+        return Optional.empty();
     }
 }
