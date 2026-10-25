@@ -25,6 +25,7 @@ quarter: default
 year: default
 executor: default
 benchmark:
+  transition-regex: '(?i)(?:index|benchmark)\s+(?:has\s+)?changed\s+from\s+.+?\s+to\s+(?:the\s+)?([A-Z0-9][A-Za-z0-9&/.,\-\s]{3,70}?)(?:\s*,\s*a\s+broad-based|\s*\(reflects|\s*,?\s*which\s+reflects|\s*\.|\s*,\s*and\b)'
   regex: '\s*\(reflects no deduction for [^)]*\)'
   suffix-regex: '(?i)(\s*\[Member\]|Member)$'
   narrative:

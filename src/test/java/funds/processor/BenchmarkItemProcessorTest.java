@@ -42,7 +42,7 @@ class BenchmarkItemProcessorTest {
     }
 
     private BenchmarkItemProcessor buildProcessor(String benchmarkRegex) {
-        return new BenchmarkItemProcessor(analyticsRepository, benchmarkRegex,"", "","TEST");
+        return new BenchmarkItemProcessor(analyticsRepository, benchmarkRegex,"", "","TEST", "");
     }
 
     private BenchmarkCandidate rule(Integer ruleId, String pattern, String providerName, String defaultType) {
