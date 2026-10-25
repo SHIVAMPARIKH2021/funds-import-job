@@ -2,7 +2,12 @@ package funds.processor;
 
 import ch.qos.logback.core.util.StringUtil;
 import funds.constants.Tags;
-import funds.model.*;
+import funds.model.FundMaster;
+import funds.model.BenchmarkMaster;
+import funds.model.FundBenchmarkAssociation;
+import funds.model.RawFundSource;
+import funds.model.FundImportPayload;
+import funds.model.ComplianceRules;
 import funds.repository.AnalyticsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.StepExecution;
@@ -25,8 +30,11 @@ import java.util.regex.Pattern;
 public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImportPayload> {
 
     private static final String ANNUAL_CADENCE = "ANNUAL";
+    private static final String DEFAULT_BENCHMARK_NAME = "Not Disclosed / New Inception";
+
     private final String executor;
     private final String dryRun;
+    private final int defaultBenchmarkId;
     private final AnalyticsRepository analyticsRepository;
     private final Map<Integer, Pattern> complianceRuleMap = new HashMap<>();
     private List<ComplianceRules> complianceRules = Collections.emptyList();
@@ -38,11 +46,13 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     public FundsItemProcessor(AnalyticsRepository analyticsRepository,
                               @Value("#{jobParameters['executor']}") String executor,
-                              @Value("#{jobParameters['dryrun']}") String dryRun
-                              ) {
+                              @Value("#{jobParameters['dryrun']}") String dryRun,
+                              @Value("${benchmark.default.id:0}") int defaultBenchmarkId
+    ) {
         this.analyticsRepository = analyticsRepository;
         this.executor = executor;
         this.dryRun = dryRun;
+        this.defaultBenchmarkId = defaultBenchmarkId;
     }
 
     @BeforeStep
@@ -105,6 +115,21 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
                 ));
                 isFirst = false;
             }
+        } else {
+            // Domain Fallback: newly incepted funds or filings without quantitative returns
+            log.debug("No benchmark disclosed for filing [{}] and series [{}]. Applying fallback domain values.",
+                    item.getAccessionNumber(), item.getSeriesId());
+
+            fund.setBenchmarkId(this.defaultBenchmarkId);
+            fund.setBenchmarkName(DEFAULT_BENCHMARK_NAME);
+
+            associations.add(new FundBenchmarkAssociation(
+                    item.getSeriesId(),
+                    this.defaultBenchmarkId,
+                    DEFAULT_BENCHMARK_NAME,
+                    true,
+                    item.getAccessionNumber()
+            ));
         }
 
         return new FundImportPayload(fund, associations);
@@ -134,11 +159,11 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
     private void resolveStrategyNarrativeAndInvestmentObjective(RawFundSource item, FundMaster fund) {
         if (item.getDisclosureTag().equalsIgnoreCase(
                 Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag())
-            || item.getDisclosureTag().equalsIgnoreCase(
+                || item.getDisclosureTag().equalsIgnoreCase(
                 Tags.INVESTMENT_STRATEGY_TEXT_BLOCK.getTag())) {
             fund.setStrategyNarrative(item.getDisclosureValue());
         } else if (item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag())
-                    || item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag())) {
+                || item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag())) {
             fund.setInvestmentObjective(item.getDisclosureValue());
         }
     }
