@@ -37,9 +37,10 @@ quarter: default
 year: default
 executor: default
 benchmark:
+  transition-regex: '(?i)(?:index|benchmark)\s+(?:has\s+)?changed\s+from\s+.+?\s+to\s+(?:the\s+)?(.+?)(?:\s*,|\s*\(|\s*\.\s*$)'
   regex: '\s*\(reflects no deduction for [^)]*\)'
   suffix-regex: '(?i)(\s*\[Member\]|Member)$'
   narrative:
-    regex: '(?:broad(?:-|\s+)based\s+(?:securities\s+)?market\s+index|broad\s+measure\s+of\s+market\s+performance|compare(?:d|s)?\s+(?:with|to)\s+(?:those\s+of\s+)?)(?:,\s*the|\s+the)?\s+([A-Z0-9][A-Za-z0-9&/.,\-\s]{3,70}?)(?:\s*\(reflects|\s*,?\s*which\s+reflects|\s*\.|\s*,\s*and\b|\s*\band\b)'
+    regex: '(?:broad(?:-|\s+)based\s+(?:securities\s+)?market\s+index|broad\s+measure\s+of\s+market\s+performance|compare(?:d|s)?\s+(?:with|to)\s+(?:those\s+of\s+)?)(?:,\s*the|\s+the)?\s+([A-Z0-9][A-Za-z0-9&/.,\-\s]{3,70}?)(?:\s*\(reflects|\s*,?\s*which\s+reflects|(?:\.\s+|\.$)|\s*,\s*and\b|\s*\band\b)'
   default:
     id: 0
