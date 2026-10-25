@@ -1,7 +1,15 @@
 package funds.repository.impl;
 
-import funds.model.*;
+import funds.model.RawBenchmarkSource;
+import funds.model.BenchmarkCandidate;
+import funds.model.BenchmarkMaster;
+import funds.model.FundMaster;
+import funds.model.RawFundSource;
+import funds.model.ComplianceRules;
+import funds.model.FundBenchmarkAssociation;
+import funds.model.QuarterFundAssociation;
 import funds.repository.AnalyticsRepository;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,10 +20,13 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSourceUtils;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
-import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
+import java.util.List;
 
 @Repository
 public class AnalyticsRepositoryImpl implements AnalyticsRepository {
@@ -33,6 +44,8 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     private final String upsertFundBenchmarkAssociationQuery;
     private final String upsertReportingQuarterSql;
     private final String upsertQuarterFundAssociationSql;
+    private final String findTextBenchmarkDisclosuresSql;
+    private final String stageFilingBenchmarkSql;
 
 
     public AnalyticsRepositoryImpl(
@@ -50,7 +63,9 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
             @Qualifier("findFundNamesByTagSql") String findFundNamesByTagSql,
             @Qualifier("upsertFundBenchmarkAssociationQuery") String upsertFundBenchmarkAssociationQuery,
             @Qualifier("upsertReportingQuarterSql") String upsertReportingQuarterSql,
-            @Qualifier("upsertQuarterFundAssociationSql") String upsertQuarterFundAssociationSql) {
+            @Qualifier("upsertQuarterFundAssociationSql") String upsertQuarterFundAssociationSql,
+            @Qualifier("findTextBenchmarkDisclosuresSql") String findTextBenchmarkDisclosuresSql,
+            @Qualifier("stageFilingBenchmarkSql") String stageFilingBenchmarkSql) {
 
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
@@ -65,6 +80,8 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.upsertFundBenchmarkAssociationQuery = upsertFundBenchmarkAssociationQuery;
         this.upsertReportingQuarterSql = upsertReportingQuarterSql;
         this.upsertQuarterFundAssociationSql = upsertQuarterFundAssociationSql;
+        this.findTextBenchmarkDisclosuresSql = findTextBenchmarkDisclosuresSql;
+        this.stageFilingBenchmarkSql = stageFilingBenchmarkSql;
     }
 
     @Override
@@ -100,10 +117,14 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         if (benchmarks == null || benchmarks.isEmpty()) {
             return;
         }
+        SqlParameterSource[] params = SqlParameterSourceUtils.createBatch(benchmarks);
+
         namedParameterJdbcTemplate.batchUpdate(
                 upsertBenchmarkMasterQuery,
-                SqlParameterSourceUtils.createBatch(benchmarks)
+                params
         );
+
+        namedParameterJdbcTemplate.batchUpdate(stageFilingBenchmarkSql, params);
     }
 
     public void saveAllFunds(List<? extends FundMaster> items) {
@@ -186,9 +207,21 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     }
 
     @Override
-    public List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> includedTags) {
+    public List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> includedTags, String accessionNumber) {
+        // Query 2: Query sec_financials schema for text disclosures
         MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("benchmarkTags", includedTags);
-        return namedParameterJdbcTemplate.query(findAllBenchmarksByTags, params, new BeanPropertyRowMapper<>(RawBenchmarkSource.class));
+                .addValue("benchmarkTags", includedTags)
+                .addValue("accessionNumber", accessionNumber);
+
+        List<RawBenchmarkSource> disclosures = namedParameterJdbcTemplate.query(
+                findTextBenchmarkDisclosuresSql,
+                params,
+                new BeanPropertyRowMapper<>(RawBenchmarkSource.class)
+        );
+
+        // Filter: Keep disclosures that match unresolved funds
+        return disclosures.stream()
+                .filter(d -> d.getSeriesId() != null)
+                .toList();
     }
 }

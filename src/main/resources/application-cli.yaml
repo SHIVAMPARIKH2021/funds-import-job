@@ -1,0 +1,31 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+  datasource:
+    url: default
+    username: default
+    password: default
+
+  batch:
+    jdbc:
+      initialize-schema: never
+      table-prefix: batch.BATCH_
+    job:
+      enabled: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+quarter: default
+year: default
+executor: default
+benchmark:
+  regex: '\s*\(reflects no deduction for [^)]*\)'
+  suffix-regex: '(?i)(\s*\[Member\]|Member)$'
+  narrative:
+    regex: '(?:broad(?:-|\s+)based\s+(?:securities\s+)?market\s+index|broad\s+measure\s+of\s+market\s+performance|compare(?:d|s)?\s+(?:with|to)\s+(?:those\s+of\s+)?)(?:,\s*the|\s+the)?\s+([A-Z0-9][A-Za-z0-9&/.,\-\s]{3,70}?)(?:\s*\(reflects|\s*,?\s*which\s+reflects|\s*\.|\s*,\s*and\b|\s*\band\b)'

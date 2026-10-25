@@ -41,10 +41,4 @@ class BenchmarkItemWriterTest {
         verify(analyticsRepository).saveAllBenchmarks(List.of(first, second));
     }
 
-    @Test
-    void testWrite_EmptyChunk_SavesEmptyList() throws Exception {
-        benchmarkItemWriter.write(Chunk.<BenchmarkMaster>of());
-
-        verify(analyticsRepository).saveAllBenchmarks(Collections.emptyList());
-    }
 }

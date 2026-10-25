@@ -98,9 +98,28 @@
                     :accessionNumber
                 )
                 ON CONFLICT (benchmark_name) DO UPDATE SET
+                    benchmark_provider = EXCLUDED.benchmark_provider,
+                    benchmark_type = EXCLUDED.benchmark_type,
                     updated_at = CURRENT_TIMESTAMP,
                     updated_by = :updatedBy
             ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="stageFilingBenchmarkSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+            INSERT INTO analytics.staged_filing_benchmark (
+                accession_number,
+                benchmark_id
+            )
+            SELECT
+                :accessionNumber,
+                bm.benchmark_id
+            FROM analytics.benchmark_master bm
+            WHERE bm.benchmark_name = :benchmarkName
+            ON CONFLICT (accession_number, benchmark_id) DO NOTHING
+        ]]></value>
         </constructor-arg>
     </bean>
 
@@ -216,6 +235,28 @@
         </constructor-arg>
     </bean>
 
+    <!-- ================================================================= -->
+    <!-- FALLBACK STEP DECOUPLED QUERIES (NO CROSS-SCHEMA JOIN)            -->
+    <!-- ================================================================= -->
+
+
+    <!-- Query 2 (sec_financials schema): Pure candidate text disclosures -->
+    <bean id="findTextBenchmarkDisclosuresSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+                SELECT DISTINCT
+                    td.adsh AS accessionNumber,
+                    td.series AS seriesId,
+                    td.tag AS rawMeasure,
+                    td.value AS stdLabel
+                FROM sec_financials.text_disclosures td
+                WHERE td.tag IN (:benchmarkTags)
+                  AND td.adsh = :accessionNumber
+                  AND td.value IS NOT NULL;
+            ]]></value>
+        </constructor-arg>
+    </bean>
+
     <bean id="findAllBenchmarksByTags" class="java.lang.String">
         <constructor-arg>
             <value>
@@ -245,28 +286,6 @@
         </constructor-arg>
     </bean>
 
-    <bean id="findUnresolvedBenchmarksFromTextFacts" class="java.lang.String">
-        <constructor-arg>
-            <value>
-                <![CDATA[
-                SELECT DISTINCT
-                    tf.adsh AS accessionNumber,
-                    tf.series AS seriesId,
-                    tf.tag AS rawMeasure,
-                    tf.text AS stdLabel
-                FROM sec_financials.text_facts tf
-                INNER JOIN sec_financials.fund_master fm
-                    ON fm.adsh = tf.adsh
-                    AND fm.series_id = tf.series
-                WHERE fm.benchmark_id IS NULL
-                    AND tf.tag IN (:benchmarkTags)
-                    AND tf.text IS NOT NULL
-                    AND TRIM(tf.text) != '';
-                ]]>
-            </value>
-        </constructor-arg>
-    </bean>
-
     <bean id="findBenchmarkByAccessionNumbers" class="java.lang.String">
         <constructor-arg>
             <value>
@@ -288,14 +307,13 @@
             <value>
                 <![CDATA[
                 SELECT
-                  benchmark_id AS benchmarkId,
-                  benchmark_name AS benchmarkName,
-                  benchmark_provider AS benchmarkProvider,
-                  benchmark_type AS benchmarkType,
-                  accession_number AS accessionNumber
-                FROM analytics.benchmark_master
-                WHERE accession_number IS NOT NULL
-                ORDER BY accession_number, benchmark_name
+                  sfb.accession_number AS accessionNumber,
+                  bm.benchmark_id AS benchmarkId,
+                  bm.benchmark_name AS benchmarkName,
+                  bm.benchmark_type AS benchmarkType
+                FROM analytics.staged_filing_benchmark sfb
+                JOIN analytics.benchmark_master bm
+                  ON bm.benchmark_id = sfb.benchmark_id;
                 ]]>
             </value>
         </constructor-arg>
@@ -432,6 +450,14 @@
             )
             ON CONFLICT (quarter_id, series_id) DO UPDATE SET
                 accession_number = EXCLUDED.accession_number;
+        ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="cleanStagedFilingBenchmarkSql" class="java.lang.String">
+        <constructor-arg>
+            <value><![CDATA[
+                    DELETE FROM analytics.staged_filing_benchmark;
         ]]></value>
         </constructor-arg>
     </bean>

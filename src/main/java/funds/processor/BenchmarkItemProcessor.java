@@ -1,6 +1,7 @@
 package funds.processor;
 
 import ch.qos.logback.core.util.StringUtil;
+import funds.constants.Tags;
 import funds.model.BenchmarkCandidate;
 import funds.model.BenchmarkMaster;
 import funds.model.RawBenchmarkSource;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -27,6 +29,8 @@ import java.util.regex.PatternSyntaxException;
 public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource, BenchmarkMaster> {
 
     private final String benchmarkRegex;
+    private final String benchmarkNarrativeRegex;
+    private final String benchmarkSuffixRegex;
     private final String executor;
     private final AnalyticsRepository analyticsRepository;
 
@@ -34,18 +38,20 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
     private List<BenchmarkCandidate> rules = Collections.emptyList();
     private final Map<Integer, Pattern> patternCache = new HashMap<>();
 
-    // Strip terminal Member or [Member] variations in pure Java
-    private static final Pattern MEMBER_SUFFIX_PATTERN =
-            Pattern.compile("(?i)(\\s*\\[Member\\]|Member)$");
-
     public BenchmarkItemProcessor(
             AnalyticsRepository analyticsRepository,
             @Value("${benchmark.regex:}") String benchmarkRegex,
+            // Regex targeting standard Form N-1A narrative benchmark comparative clauses
+            @Value("${benchmark.narrative.regex}") String benchmarkNarrativeRegex,
+            // Strip terminal Member or [Member] variations in pure Java with regex
+            @Value("${benchmark.suffix-regex}") String benchmarkSuffixRegex,
             @Value("#{jobParameters['executor']}") String executor
     ) {
         this.analyticsRepository = analyticsRepository;
         this.benchmarkRegex = benchmarkRegex;
         this.executor = executor;
+        this.benchmarkNarrativeRegex = benchmarkNarrativeRegex;
+        this.benchmarkSuffixRegex = benchmarkSuffixRegex;
     }
 
     @BeforeStep
@@ -98,22 +104,26 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
 
         String rawCandidate = candidateOpt.get();
 
-        // 2. Filter out non-benchmark measure strings in Java
+        // 2. If this candidate originated from a TextBlock disclosure, extract the benchmark name entity
+
+
+        // 3. Filter non-benchmark measure strings
         String lower = rawCandidate.toLowerCase();
         if (lower.contains("aftertax") || lower.contains("returnbeforetax")) {
             return null;
         }
 
-        // 3. Strip trailing "[Member]" or "Member"
-        String stripped = MEMBER_SUFFIX_PATTERN.matcher(rawCandidate).replaceAll("").trim();
+        // 4. Strip trailing Member / [Member]
+        String stripped = Pattern.compile(benchmarkSuffixRegex).matcher(rawCandidate).replaceAll("").trim();
 
-        // 4. Clean boilerplate text (e.g. "(reflects no deduction for fees...")
+        // 5. Clean boilerplate text
         String cleaned = this.boilerplatePattern.matcher(stripped).replaceAll("").trim();
         if (cleaned.isBlank()) {
             return null;
         }
 
-        // 5. Categorize Provider and Type via rules table
+
+        // 7. Match Provider & Type via rules table
         String matchedProvider = "Other / Self-Indexed";
         String matchedType = "Category / Secondary";
 
@@ -126,8 +136,35 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             }
         }
 
+        String benchmarkNameFromTextDisclosure = "";
+
+        if (StringUtil.isNullOrEmpty(cleaned)) {
+            List<RawBenchmarkSource> textDisclosureSources = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(
+                    List.of(Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
+                            Tags.INDEX_NO_DEDUCTION_FOR_FEES_EXPENSES_TAXES.getTag(),
+                            Tags.PERFORMANCE_TABLE_NARRATIVE_TEXT_BLOCK.getTag(),
+                            Tags.PERFORMANCE_NARRATIVE_TEXT_BLOCK.getTag(),
+                            Tags.PERFORMANCE_TABLE_HEADING.getTag()),
+                    source.getAccessionNumber()
+            );
+            for(RawBenchmarkSource textDisclosureSource: textDisclosureSources) {
+                if (isTextBlockDisclosure(textDisclosureSource)) {
+                    benchmarkNameFromTextDisclosure = extractEntityFromNarrative(rawCandidate);
+                    if (benchmarkNameFromTextDisclosure == null || benchmarkNameFromTextDisclosure.isBlank()) {
+                        // Could not extract a specific benchmark from narrative prose; skip record
+                        return null;
+                    }
+                }
+            }
+        }
+
         BenchmarkMaster benchmarkMaster = new BenchmarkMaster();
-        benchmarkMaster.setBenchmarkName(cleaned);
+        benchmarkMaster.setBenchmarkName(
+                StringUtil.isNullOrEmpty(cleaned)
+                ? StringUtil.isNullOrEmpty(benchmarkNameFromTextDisclosure)
+                ? null
+                : benchmarkNameFromTextDisclosure
+                : cleaned);
         benchmarkMaster.setBenchmarkProvider(matchedProvider);
         benchmarkMaster.setBenchmarkType(matchedType);
         benchmarkMaster.setCreatedBy(this.executor);
@@ -151,5 +188,21 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             return Optional.of(source.getRawMeasure().trim());
         }
         return Optional.empty();
+    }
+
+    private boolean isTextBlockDisclosure(RawBenchmarkSource source) {
+        String tag = source.getRawMeasure();
+        return tag != null && (tag.endsWith("TextBlock") || tag.contains("Narrative"));
+    }
+
+    private String extractEntityFromNarrative(String prose) {
+        // Strip HTML markup and normalize whitespace
+        String cleanProse = prose.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim();
+
+        Matcher matcher = Pattern.compile(this.benchmarkNarrativeRegex, Pattern.CASE_INSENSITIVE).matcher(cleanProse);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return null;
     }
 }

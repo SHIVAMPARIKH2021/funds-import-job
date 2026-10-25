@@ -2,22 +2,15 @@ package funds.writer;
 
 import funds.model.BenchmarkMaster;
 import funds.repository.AnalyticsRepository;
-import org.springframework.batch.core.configuration.annotation.StepScope;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.item.Chunk;
 import org.springframework.batch.item.ItemWriter;
-import org.springframework.batch.item.database.JdbcBatchItemWriter;
-import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-import javax.sql.DataSource;
-
+@Slf4j
 @Component
-@StepScope
 public class BenchmarkItemWriter implements ItemWriter<BenchmarkMaster> {
 
-    @Autowired
     private final AnalyticsRepository analyticsRepository;
 
     public BenchmarkItemWriter(AnalyticsRepository analyticsRepository) {
@@ -25,7 +18,10 @@ public class BenchmarkItemWriter implements ItemWriter<BenchmarkMaster> {
     }
 
     @Override
-    public void write(Chunk<? extends BenchmarkMaster> chunk) throws Exception {
-        analyticsRepository.saveAllBenchmarks(chunk.getItems());
+    public void write(Chunk<? extends BenchmarkMaster> chunk) {
+        if (!chunk.isEmpty()) {
+            analyticsRepository.saveAllBenchmarks(chunk.getItems());
+            log.info("Successfully persisted benchmark chunk of {}", chunk.getItems().size());
+        }
     }
 }

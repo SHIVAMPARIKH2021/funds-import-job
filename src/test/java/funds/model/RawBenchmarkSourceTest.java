@@ -27,7 +27,8 @@ class RawBenchmarkSourceTest {
                 "SPFiveHundredIndexMember",
                 "S&P 500",
                 "S&P 500 Index [Member]",
-                "Standard and Poor 500 Index"
+                "Standard and Poor 500 Index",
+                "S&P 500 Index"
         );
 
         assertEquals("ACC12345", source.getAccessionNumber());
@@ -36,6 +37,7 @@ class RawBenchmarkSourceTest {
         assertEquals("S&P 500", source.getTerseLabel());
         assertEquals("S&P 500 Index [Member]", source.getStdLabel());
         assertEquals("Standard and Poor 500 Index", source.getVerboseLabel());
+        assertEquals("S&P 500 Index", source.getBenchmarkName());
     }
 
     @Test

@@ -16,4 +16,5 @@ public class RawBenchmarkSource extends BaseModel{
     private String terseLabel;
     private String stdLabel;
     private String verboseLabel;
+    private String benchmarkName;
 }
