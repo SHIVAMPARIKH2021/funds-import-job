@@ -1,6 +1,7 @@
 package funds.processor;
 
 import ch.qos.logback.core.util.StringUtil;
+import funds.constants.Tags;
 import funds.model.BenchmarkCandidate;
 import funds.model.BenchmarkMaster;
 import funds.model.RawBenchmarkSource;
@@ -104,13 +105,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         String rawCandidate = candidateOpt.get();
 
         // 2. If this candidate originated from a TextBlock disclosure, extract the benchmark name entity
-        if (isTextBlockDisclosure(source)) {
-            rawCandidate = extractEntityFromNarrative(rawCandidate);
-            if (rawCandidate == null || rawCandidate.isBlank()) {
-                // Could not extract a specific benchmark from narrative prose; skip record
-                return null;
-            }
-        }
+
 
         // 3. Filter non-benchmark measure strings
         String lower = rawCandidate.toLowerCase();
@@ -127,11 +122,6 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             return null;
         }
 
-        // 6. Safety Guard: Benchmark name cannot exceed 255 chars (prevents B-tree index row limit overflow)
-        if (cleaned.length() > 255) {
-            log.warn("Discarding candidate exceeding max length ({} chars): [{}]", cleaned.length(), cleaned.substring(0, 100));
-            return null;
-        }
 
         // 7. Match Provider & Type via rules table
         String matchedProvider = "Other / Self-Indexed";
@@ -146,8 +136,35 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             }
         }
 
+        String benchmarkNameFromTextDisclosure = "";
+
+        if (StringUtil.isNullOrEmpty(cleaned)) {
+            List<RawBenchmarkSource> textDisclosureSources = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(
+                    List.of(Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
+                            Tags.INDEX_NO_DEDUCTION_FOR_FEES_EXPENSES_TAXES.getTag(),
+                            Tags.PERFORMANCE_TABLE_NARRATIVE_TEXT_BLOCK.getTag(),
+                            Tags.PERFORMANCE_NARRATIVE_TEXT_BLOCK.getTag(),
+                            Tags.PERFORMANCE_TABLE_HEADING.getTag()),
+                    source.getAccessionNumber()
+            );
+            for(RawBenchmarkSource textDisclosureSource: textDisclosureSources) {
+                if (isTextBlockDisclosure(textDisclosureSource)) {
+                    benchmarkNameFromTextDisclosure = extractEntityFromNarrative(rawCandidate);
+                    if (benchmarkNameFromTextDisclosure == null || benchmarkNameFromTextDisclosure.isBlank()) {
+                        // Could not extract a specific benchmark from narrative prose; skip record
+                        return null;
+                    }
+                }
+            }
+        }
+
         BenchmarkMaster benchmarkMaster = new BenchmarkMaster();
-        benchmarkMaster.setBenchmarkName(cleaned);
+        benchmarkMaster.setBenchmarkName(
+                StringUtil.isNullOrEmpty(cleaned)
+                ? StringUtil.isNullOrEmpty(benchmarkNameFromTextDisclosure)
+                ? null
+                : benchmarkNameFromTextDisclosure
+                : cleaned);
         benchmarkMaster.setBenchmarkProvider(matchedProvider);
         benchmarkMaster.setBenchmarkType(matchedType);
         benchmarkMaster.setCreatedBy(this.executor);

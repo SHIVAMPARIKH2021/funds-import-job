@@ -4,7 +4,6 @@ import funds.model.BenchmarkMaster;
 import funds.model.RawBenchmarkSource;
 import funds.processor.BenchmarkItemProcessor;
 import funds.reader.BenchmarkItemReader;
-import funds.reader.TextBenchmarkItemReader;
 import funds.writer.BenchmarkItemWriter;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.repository.JobRepository;
@@ -30,22 +29,6 @@ public class BenchmarkProviderConfig {
                 .reader(benchmarkItemReader)
                 .processor(benchmarkItemProcessor)
                 .writer(benchmarkItemWriter)
-                .build();
-    }
-
-    @Bean
-    public Step textBenchmarkFallbackStep(
-            JobRepository jobRepository,
-            PlatformTransactionManager transactionManager,
-            TextBenchmarkItemReader textReader,
-            BenchmarkItemProcessor benchmarkProcessor,
-            BenchmarkItemWriter benchmarkWriter
-    ) {
-        return new StepBuilder("textBenchmarkFallbackStep", jobRepository)
-                .<RawBenchmarkSource, BenchmarkMaster>chunk(CHUNK_SIZE, transactionManager)
-                .reader(textReader)
-                .processor(benchmarkProcessor)
-                .writer(benchmarkWriter)
                 .build();
     }
 }

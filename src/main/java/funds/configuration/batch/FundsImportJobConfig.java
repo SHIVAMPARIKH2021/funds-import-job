@@ -5,13 +5,13 @@ import funds.model.RawFundSource;
 import funds.processor.FundsItemProcessor;
 import funds.reader.FundsImportReader;
 import funds.tasklet.InitReportingQuarterTasklet;
+import funds.tasklet.CleanStagedFilingBenchmarkTasklet;
 import funds.writer.FundsItemWriter;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -31,16 +31,16 @@ public class FundsImportJobConfig {
     @Bean
     public Job fundsImportJob(
             JobRepository jobRepository,
-            @Qualifier("initReportingQuarterStep") Step initReportingQuarterStep,
-            @Qualifier("benchmarkExtractionStep") Step benchmarkExtractionStep,
-            @Qualifier("fundsImportStep") Step fundsImportStep,
-            @Qualifier("textBenchmarkFallbackStep") Step textBenchmarkFallbackStep
+            Step initReportingQuarterStep,
+            Step benchmarkExtractionStep,
+            Step fundsImportStep,
+            Step cleanStagingStep
     ) {
         return new JobBuilder("fundsImportJob", jobRepository)
                 .start(initReportingQuarterStep)
+                .next(cleanStagingStep)
                 .next(benchmarkExtractionStep)
                 .next(fundsImportStep)
-                .next(textBenchmarkFallbackStep)
                 .build();
     }
 
@@ -68,6 +68,17 @@ public class FundsImportJobConfig {
                 .reader(fundsImportReader)
                 .processor(fundsItemProcessor)
                 .writer(fundsItemWriter)
+                .build();
+    }
+
+    @Bean
+    public Step cleanStagingStep(
+            JobRepository jobRepository,
+            PlatformTransactionManager transactionManager,
+            CleanStagedFilingBenchmarkTasklet cleanStagedFilingBenchmarkTasklet
+    ) {
+        return new StepBuilder("cleanStagedBenchmarksStep", jobRepository)
+                .tasklet(cleanStagedFilingBenchmarkTasklet, transactionManager)
                 .build();
     }
 }

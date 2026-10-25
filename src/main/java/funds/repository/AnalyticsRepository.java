@@ -30,5 +30,5 @@ public interface AnalyticsRepository {
 
     void upsertQuarterFundAssociations(List<QuarterFundAssociation> associations);
 
-    List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> benchmarkTags);
+    List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> benchmarkTags, String accessionNumber);
 }
