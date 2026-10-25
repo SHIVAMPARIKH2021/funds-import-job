@@ -96,34 +96,68 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             return null;
         }
 
-        // 1. Resolve raw candidate via Java fallback precedence
+        // 1. Resolve raw candidate from numeric labels/measures
         Optional<String> candidateOpt = extractCandidate(source);
-        if (candidateOpt.isEmpty()) {
+        String cleaned = null;
+
+        if (candidateOpt.isPresent()) {
+            String rawCandidate = candidateOpt.get();
+
+            // Filter non-benchmark measure strings
+            String lower = rawCandidate.toLowerCase();
+            if (!lower.contains("aftertax") && !lower.contains("returnbeforetax")) {
+                // Strip trailing Member / [Member]
+                String stripped = Pattern.compile(benchmarkSuffixRegex).matcher(rawCandidate).replaceAll("").trim();
+                // Clean boilerplate text
+                String canedCleaned = this.boilerplatePattern.matcher(stripped).replaceAll("").trim();
+                if (!canedCleaned.isBlank()) {
+                    cleaned = canedCleaned;
+                }
+            }
+        }
+
+        // 2. Fallback to Text Disclosures ONLY IF numeric facts yielded no benchmark
+        if (cleaned == null || cleaned.isBlank()) {
+            List<RawBenchmarkSource> textDisclosureSources = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(
+                    List.of(Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
+                            Tags.INDEX_NO_DEDUCTION_FOR_FEES_EXPENSES_TAXES.getTag(),
+                            Tags.PERFORMANCE_TABLE_NARRATIVE_TEXT_BLOCK.getTag(),
+                            Tags.PERFORMANCE_NARRATIVE_TEXT_BLOCK.getTag(),
+                            Tags.PERFORMANCE_TABLE_HEADING.getTag()),
+                    source.getAccessionNumber()
+            );
+
+            if (textDisclosureSources != null) {
+                for (RawBenchmarkSource textSource : textDisclosureSources) {
+                    // Check label/measure first, then narrative value
+                    String textContent = !StringUtil.isNullOrEmpty(textSource.getStdLabel())
+                            ? textSource.getStdLabel()
+                            : textSource.getRawMeasure();
+
+                    if (textContent != null && !textContent.isBlank()) {
+                        String extracted = isTextBlockDisclosure(textSource)
+                                ? extractEntityFromNarrative(textContent)
+                                : textContent;
+
+                        if (extracted != null && !extracted.isBlank()) {
+                            String stripped = Pattern.compile(benchmarkSuffixRegex).matcher(extracted).replaceAll("").trim();
+                            String canedCleaned = this.boilerplatePattern.matcher(stripped).replaceAll("").trim();
+                            if (!canedCleaned.isBlank()) {
+                                cleaned = canedCleaned;
+                                break; // Stop at first valid benchmark found in text disclosures
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If neither numeric facts nor text disclosures yielded a benchmark name, skip
+        if (cleaned == null || cleaned.isBlank()) {
             return null;
         }
 
-        String rawCandidate = candidateOpt.get();
-
-        // 2. If this candidate originated from a TextBlock disclosure, extract the benchmark name entity
-
-
-        // 3. Filter non-benchmark measure strings
-        String lower = rawCandidate.toLowerCase();
-        if (lower.contains("aftertax") || lower.contains("returnbeforetax")) {
-            return null;
-        }
-
-        // 4. Strip trailing Member / [Member]
-        String stripped = Pattern.compile(benchmarkSuffixRegex).matcher(rawCandidate).replaceAll("").trim();
-
-        // 5. Clean boilerplate text
-        String cleaned = this.boilerplatePattern.matcher(stripped).replaceAll("").trim();
-        if (cleaned.isBlank()) {
-            return null;
-        }
-
-
-        // 7. Match Provider & Type via rules table
+        // 3. Match Provider & Type via rules table
         String matchedProvider = "Other / Self-Indexed";
         String matchedType = "Category / Secondary";
 
@@ -136,35 +170,8 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             }
         }
 
-        String benchmarkNameFromTextDisclosure = "";
-
-        if (StringUtil.isNullOrEmpty(cleaned)) {
-            List<RawBenchmarkSource> textDisclosureSources = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(
-                    List.of(Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
-                            Tags.INDEX_NO_DEDUCTION_FOR_FEES_EXPENSES_TAXES.getTag(),
-                            Tags.PERFORMANCE_TABLE_NARRATIVE_TEXT_BLOCK.getTag(),
-                            Tags.PERFORMANCE_NARRATIVE_TEXT_BLOCK.getTag(),
-                            Tags.PERFORMANCE_TABLE_HEADING.getTag()),
-                    source.getAccessionNumber()
-            );
-            for(RawBenchmarkSource textDisclosureSource: textDisclosureSources) {
-                if (isTextBlockDisclosure(textDisclosureSource)) {
-                    benchmarkNameFromTextDisclosure = extractEntityFromNarrative(rawCandidate);
-                    if (benchmarkNameFromTextDisclosure == null || benchmarkNameFromTextDisclosure.isBlank()) {
-                        // Could not extract a specific benchmark from narrative prose; skip record
-                        return null;
-                    }
-                }
-            }
-        }
-
         BenchmarkMaster benchmarkMaster = new BenchmarkMaster();
-        benchmarkMaster.setBenchmarkName(
-                StringUtil.isNullOrEmpty(cleaned)
-                ? StringUtil.isNullOrEmpty(benchmarkNameFromTextDisclosure)
-                ? null
-                : benchmarkNameFromTextDisclosure
-                : cleaned);
+        benchmarkMaster.setBenchmarkName(cleaned);
         benchmarkMaster.setBenchmarkProvider(matchedProvider);
         benchmarkMaster.setBenchmarkType(matchedType);
         benchmarkMaster.setCreatedBy(this.executor);

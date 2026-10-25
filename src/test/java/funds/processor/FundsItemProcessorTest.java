@@ -5,37 +5,39 @@ import funds.model.*;
 import funds.repository.AnalyticsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.batch.core.StepExecution;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class FundsItemProcessorTest {
 
+    private static final int DEFAULT_BENCHMARK_ID = 0;
+    private static final String DEFAULT_BENCHMARK_NAME = "Not Disclosed / New Inception";
+
     @Mock
     private AnalyticsRepository analyticsRepository;
 
-    @InjectMocks
     private FundsItemProcessor fundsItemProcessor;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // @BeforeStep is a Spring Batch lifecycle callback and is never invoked in plain
-        // Mockito unit tests; tests that need step-scoped state stub the repository and
-        // call fundsItemProcessor.setup(...) explicitly.
-        // Reset the dryRun/executor job parameter values
-        ReflectionTestUtils.setField(fundsItemProcessor, "executor", "TEST");
-        ReflectionTestUtils.setField(fundsItemProcessor, "dryRun", "false");
+        // Explicit constructor instantiation avoids Mockito injection failures
+        this.fundsItemProcessor = new FundsItemProcessor(
+                analyticsRepository,
+                "TEST",
+                "false",
+                DEFAULT_BENCHMARK_ID
+        );
     }
 
     @Test
@@ -61,25 +63,31 @@ class FundsItemProcessorTest {
     }
 
     @Test
-    void testProcess_SkipsDryRun() throws Exception  {
+    void testProcess_SkipsDryRun() throws Exception {
+        // Instantiate processor with dryRun = true
+        FundsItemProcessor dryRunProcessor = new FundsItemProcessor(
+                analyticsRepository,
+                "TEST",
+                "true",
+                DEFAULT_BENCHMARK_ID
+        );
+
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST");
         item.setDisclosureValue("Test strategy");
-        // Set dryRun to true
-        ReflectionTestUtils.setField(fundsItemProcessor, "dryRun", "true");
-        FundImportPayload result = fundsItemProcessor.process(item);
+
+        FundImportPayload result = dryRunProcessor.process(item);
         assertNull(result);
     }
 
     @Test
-    void testProcess_WithComplianceRuleMatch() throws Exception  {
+    void testProcess_WithComplianceRuleMatch() throws Exception {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
         item.setDisclosureValue("This fund has a value that matches the compliance rule");
         item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
 
-        // Setup mock data
         List<ComplianceRules> rules = Collections.singletonList(new ComplianceRules(
                 true, true, "match.*rule", "ruleName", 1, 1, "TARGET_STRATEGY"));
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(rules);
@@ -88,8 +96,6 @@ class FundsItemProcessorTest {
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag())).thenReturn(fundNames);
         when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
 
-        // @BeforeStep is a Spring Batch lifecycle callback and is never invoked in plain
-        // Mockito unit tests, so run the step setup manually before processing.
         fundsItemProcessor.setup(mock(StepExecution.class));
 
         FundImportPayload result = fundsItemProcessor.process(item);
@@ -97,10 +103,14 @@ class FundsItemProcessorTest {
         assertEquals("TEST123", result.getFundMaster().getSeriesId());
         assertEquals("TARGET_STRATEGY", result.getFundMaster().getStrategyType());
         assertEquals("Test Fund", result.getFundMaster().getFundName());
+        assertEquals(DEFAULT_BENCHMARK_ID, result.getFundMaster().getBenchmarkId());
+        assertEquals(DEFAULT_BENCHMARK_NAME, result.getFundMaster().getBenchmarkName());
+        assertEquals(1, result.getAssociations().size());
+        assertEquals(DEFAULT_BENCHMARK_ID, result.getAssociations().get(0).getBenchmarkId());
     }
 
     @Test
-    void testProcess_NoComplianceRuleMatchReturnsUnknown() throws Exception  {
+    void testProcess_NoComplianceRuleMatchReturnsUnknown() throws Exception {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
@@ -175,7 +185,6 @@ class FundsItemProcessorTest {
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
                 .thenReturn(Collections.emptyMap());
 
-        // Setup benchmark groupings
         Map<String, List<BenchmarkMaster>> benchmarksMap = new HashMap<>();
         BenchmarkMaster bm = new BenchmarkMaster();
         bm.setBenchmarkId(1);
@@ -192,6 +201,8 @@ class FundsItemProcessorTest {
         assertEquals(1, result.getAssociations().size());
         assertEquals("TEST123", result.getAssociations().get(0).getSeriesId());
         assertEquals(1, result.getAssociations().get(0).getBenchmarkId());
+        assertEquals("Benchmark1", result.getFundMaster().getBenchmarkName());
+        assertTrue(result.getAssociations().get(0).getIsPrimary());
     }
 
     @Test
@@ -211,8 +222,6 @@ class FundsItemProcessorTest {
 
         FundImportPayload result = fundsItemProcessor.process(item);
         assertNotNull(result);
-        assertEquals("Mapped Fund Name", result.getFundMaster().getFundName());
-        // When a fund name is mapped, it should use the mapped name over the fund family
         assertEquals("Mapped Fund Name", result.getFundMaster().getFundName());
     }
 
@@ -243,9 +252,41 @@ class FundsItemProcessorTest {
         FundImportPayload result = fundsItemProcessor.process(item);
         assertNotNull(result);
         assertEquals(2, result.getAssociations().size());
-        // First benchmark should be primary
         assertEquals(true, result.getAssociations().get(0).getIsPrimary());
         assertEquals(false, result.getAssociations().get(1).getIsPrimary());
+        assertEquals(1, result.getFundMaster().getBenchmarkId());
+        assertEquals("Benchmark1", result.getFundMaster().getBenchmarkName());
+    }
+
+    @Test
+    void testProcess_NoBenchmarkDisclosed_AppliesDomainFallback() throws Exception {
+        RawFundSource item = new RawFundSource();
+        item.setSeriesId("NEW_INCEPTION_123");
+        item.setAccessionNumber("ACC_NO_BENCHMARK");
+        item.setDisclosureValue("Strategy narrative");
+        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+
+        when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
+                .thenReturn(Collections.emptyMap());
+
+        fundsItemProcessor.setup(mock(StepExecution.class));
+
+        FundImportPayload result = fundsItemProcessor.process(item);
+        assertNotNull(result);
+
+        FundMaster fund = result.getFundMaster();
+        assertEquals(DEFAULT_BENCHMARK_ID, fund.getBenchmarkId());
+        assertEquals(DEFAULT_BENCHMARK_NAME, fund.getBenchmarkName());
+
+        assertNotNull(result.getAssociations());
+        assertEquals(1, result.getAssociations().size());
+        FundBenchmarkAssociation association = result.getAssociations().get(0);
+        assertEquals("NEW_INCEPTION_123", association.getSeriesId());
+        assertEquals(DEFAULT_BENCHMARK_ID, association.getBenchmarkId());
+        assertEquals(DEFAULT_BENCHMARK_NAME, association.getBenchmarkName());
+        assertTrue(association.getIsPrimary());
     }
 
     @Test
@@ -272,7 +313,6 @@ class FundsItemProcessorTest {
         assertEquals("TEST123", fund.getSeriesId());
         assertEquals("Test Fund", fund.getFundName());
         assertEquals("Test Family", fund.getFundFamily());
-        assertEquals("TEST", fund.getPrimaryTicker());
         assertEquals("TEST", fund.getPrimaryTicker());
         assertEquals("ANNUAL", fund.getReportingCadence());
         assertEquals(true, fund.getHasDailyPricing());
