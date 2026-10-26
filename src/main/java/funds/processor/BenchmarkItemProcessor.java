@@ -133,7 +133,6 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         }
 
         // 2. Fallback to Text Disclosures ONLY IF numeric facts yielded no benchmark
-        // 2. Fallback to Text Disclosures ONLY IF numeric facts yielded no benchmark
         if (cleaned == null || cleaned.isBlank()) {
             List<RawBenchmarkSource> textDisclosureSources = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(
                     List.of(Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
