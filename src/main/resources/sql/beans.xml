@@ -261,26 +261,45 @@
         <constructor-arg>
             <value>
                 <![CDATA[
+                WITH raw_candidate_facts AS (
+                    SELECT
+                        nf.adsh AS accessionNumber,
+                        nf.series AS seriesId,
+                        -- 1. Extract benchmark token from measure, or class if measure is blank
+                        CASE
+                            WHEN nf.measure IS NOT NULL
+                                 AND TRIM(nf.measure) != ''
+                                 AND TRIM(nf.measure) NOT IN (:excludedBenchmarks)
+                                 THEN TRIM(nf.measure)
+                            WHEN nf.class IS NOT NULL
+                                 AND TRIM(nf.class) != ''
+                                 AND TRIM(nf.class) !~ '^C[0-9]{9}'
+                                 THEN TRIM(nf.class)
+                        END AS rawMeasure
+                    FROM sec_financials.numeric_facts nf
+                    WHERE (
+                        nf.tag IN (:benchmarkTags)
+                    )
+                    AND nf.series IS NOT NULL
+                    AND TRIM(nf.series) != ''
+                )
                 SELECT DISTINCT
-                    nf.adsh AS accessionNumber,
-                    nf.series AS seriesId,
-                    nf.measure AS rawMeasure,
+                    rcf.accessionNumber,
+                    rcf.seriesId,
+                    rcf.rawMeasure,
                     pl.terse AS terseLabel,
                     pl.std AS stdLabel,
                     pl.verbose AS verboseLabel
-                FROM sec_financials.numeric_facts nf
+                FROM raw_candidate_facts rcf
                 LEFT JOIN sec_financials.presentation_labels pl
-                    ON nf.adsh = pl.adsh
+                    ON rcf.accessionNumber = pl.adsh
                     AND (
-                        pl.tag = nf.measure
-                        OR pl.tag = CONCAT(nf.measure, 'Member')
+                        pl.tag = rcf.rawMeasure
+                        OR pl.tag = CONCAT(rcf.rawMeasure, 'Member')
+                        OR pl.tag = CONCAT('index_', rcf.rawMeasure, 'Member')
+                        OR pl.tag = CONCAT('rr_', rcf.rawMeasure, 'Member')
                     )
-                WHERE nf.tag IN (:benchmarkTags)
-                    AND nf.series IS NOT NULL
-                    AND TRIM(nf.series) != ''
-                    AND nf.measure IS NOT NULL
-                    AND TRIM(nf.measure) != ''
-                    AND TRIM(nf.measure) NOT IN (:excludedBenchmarks);
+                WHERE rcf.rawMeasure IS NOT NULL;
                 ]]>
             </value>
         </constructor-arg>
