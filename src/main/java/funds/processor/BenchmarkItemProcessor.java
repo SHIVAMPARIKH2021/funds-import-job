@@ -133,6 +133,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         }
 
         // 2. Fallback to Text Disclosures ONLY IF numeric facts yielded no benchmark
+        // 2. Fallback to Text Disclosures ONLY IF numeric facts yielded no benchmark
         if (cleaned == null || cleaned.isBlank()) {
             List<RawBenchmarkSource> textDisclosureSources = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(
                     List.of(Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
@@ -145,13 +146,15 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
 
             if (textDisclosureSources != null && !textDisclosureSources.isEmpty()) {
                 for (RawBenchmarkSource textSource : textDisclosureSources) {
-                    // For narrative blocks, the disclosure body is in rawMeasure
                     String textContent = !StringUtil.isNullOrEmpty(textSource.getRawMeasure())
                             ? textSource.getRawMeasure()
                             : textSource.getStdLabel();
 
                     if (textContent != null && !textContent.isBlank()) {
-                        String extracted = isTextBlockDisclosure(textSource)
+                        boolean isNarrative = isTextBlockDisclosure(textSource);
+
+                        // If it is a text block, strictly extract the index entity; never fall back to raw narrative
+                        String extracted = isNarrative
                                 ? extractEntityFromNarrative(textContent)
                                 : textContent;
 
@@ -161,9 +164,16 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
                                     ? this.boilerplatePattern.matcher(stripped).replaceAll("").trim()
                                     : stripped;
 
-                            if (!candCleaned.isBlank()) {
+                            // Filter out generic table headings and intro paragraphs
+                            String lower = candCleaned.toLowerCase();
+                            boolean isGenericBoilerplate = lower.contains("average annual total return")
+                                    || lower.startsWith("the bar chart")
+                                    || lower.startsWith("the information")
+                                    || lower.contains("table heading");
+
+                            if (!candCleaned.isBlank() && candCleaned.length() <= 100 && !isGenericBoilerplate) {
                                 cleaned = candCleaned;
-                                break; // Stop at first valid benchmark resolved from narrative
+                                break; // Stop only when a genuine index title has been resolved
                             }
                         }
                     }
