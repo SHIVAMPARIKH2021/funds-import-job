@@ -126,7 +126,7 @@
     <bean id="upsertFundMasterQuery" class="java.lang.String">
         <constructor-arg>
             <value><![CDATA[
-                INSERT INTO analytics.fund_master (
+            INSERT INTO analytics.fund_master (
                 series_id,
                 cik,
                 fund_name,
@@ -173,8 +173,16 @@
                 investment_objective = COALESCE(EXCLUDED.investment_objective, analytics.fund_master.investment_objective),
                 strategy_narrative = COALESCE(EXCLUDED.strategy_narrative, analytics.fund_master.strategy_narrative),
                 strategy_type = COALESCE(EXCLUDED.strategy_type, analytics.fund_master.strategy_type),
-                benchmark_id = COALESCE(EXCLUDED.benchmark_id, analytics.fund_master.benchmark_id),
-                benchmark_name = COALESCE(EXCLUDED.benchmark_name, analytics.fund_master.benchmark_name),
+                benchmark_id = COALESCE(
+                    NULLIF(EXCLUDED.benchmark_id, 0),
+                    analytics.fund_master.benchmark_id,
+                    0
+                ),
+                benchmark_name = CASE
+                    WHEN EXCLUDED.benchmark_id IS NOT NULL AND EXCLUDED.benchmark_id <> 0
+                         THEN EXCLUDED.benchmark_name
+                    ELSE COALESCE(analytics.fund_master.benchmark_name, EXCLUDED.benchmark_name)
+                END,
                 accession_number  = COALESCE(EXCLUDED.accession_number, analytics.fund_master.accession_number),
                 reporting_cadence = COALESCE(EXCLUDED.reporting_cadence, analytics.fund_master.reporting_cadence),
                 has_daily_pricing = COALESCE(EXCLUDED.has_daily_pricing, analytics.fund_master.has_daily_pricing),
@@ -207,10 +215,19 @@
             )
             ON CONFLICT (series_id, benchmark_id) DO UPDATE SET
                 benchmark_name   = COALESCE(EXCLUDED.benchmark_name, analytics.fund_benchmark_association.benchmark_name),
-                is_primary       = EXCLUDED.is_primary,
+                is_primary       = CASE
+                    -- If incoming record is fallback 0, do NOT mark primary if the fund already has a real primary benchmark
+                    WHEN EXCLUDED.benchmark_id = 0 AND EXISTS (
+                        SELECT 1 FROM analytics.fund_benchmark_association existing
+                        WHERE existing.series_id = EXCLUDED.series_id
+                          AND existing.benchmark_id <> 0
+                          AND existing.is_primary = TRUE
+                    ) THEN FALSE
+                    ELSE EXCLUDED.is_primary
+                END,
                 accession_number = EXCLUDED.accession_number,
                 updated_at       = CURRENT_TIMESTAMP
-        ]]></value>
+            ]]></value>
         </constructor-arg>
     </bean>
 
@@ -261,26 +278,45 @@
         <constructor-arg>
             <value>
                 <![CDATA[
+                WITH raw_candidate_facts AS (
+                    SELECT
+                        nf.adsh AS accessionNumber,
+                        nf.series AS seriesId,
+                        -- 1. Extract benchmark token from measure, or class if measure is blank
+                        CASE
+                            WHEN nf.measure IS NOT NULL
+                                 AND TRIM(nf.measure) != ''
+                                 AND TRIM(nf.measure) NOT IN (:excludedBenchmarks)
+                                 THEN TRIM(nf.measure)
+                            WHEN nf.class IS NOT NULL
+                                 AND TRIM(nf.class) != ''
+                                 AND TRIM(nf.class) !~ '^C[0-9]{9}'
+                                 THEN TRIM(nf.class)
+                        END AS rawMeasure
+                    FROM sec_financials.numeric_facts nf
+                    WHERE (
+                        nf.tag IN (:benchmarkTags)
+                    )
+                    AND nf.series IS NOT NULL
+                    AND TRIM(nf.series) != ''
+                )
                 SELECT DISTINCT
-                    nf.adsh AS accessionNumber,
-                    nf.series AS seriesId,
-                    nf.measure AS rawMeasure,
+                    rcf.accessionNumber,
+                    rcf.seriesId,
+                    rcf.rawMeasure,
                     pl.terse AS terseLabel,
                     pl.std AS stdLabel,
                     pl.verbose AS verboseLabel
-                FROM sec_financials.numeric_facts nf
+                FROM raw_candidate_facts rcf
                 LEFT JOIN sec_financials.presentation_labels pl
-                    ON nf.adsh = pl.adsh
+                    ON rcf.accessionNumber = pl.adsh
                     AND (
-                        pl.tag = nf.measure
-                        OR pl.tag = CONCAT(nf.measure, 'Member')
+                        pl.tag = rcf.rawMeasure
+                        OR pl.tag = CONCAT(rcf.rawMeasure, 'Member')
+                        OR pl.tag = CONCAT('index_', rcf.rawMeasure, 'Member')
+                        OR pl.tag = CONCAT('rr_', rcf.rawMeasure, 'Member')
                     )
-                WHERE nf.tag IN (:benchmarkTags)
-                    AND nf.series IS NOT NULL
-                    AND TRIM(nf.series) != ''
-                    AND nf.measure IS NOT NULL
-                    AND TRIM(nf.measure) != ''
-                    AND TRIM(nf.measure) NOT IN (:excludedBenchmarks);
+                WHERE rcf.rawMeasure IS NOT NULL;
                 ]]>
             </value>
         </constructor-arg>

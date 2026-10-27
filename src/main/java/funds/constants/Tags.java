@@ -12,6 +12,7 @@ public enum Tags {
     AVERAGE_ANNUAL_RETURN_INCEPTION("AverageAnnualReturnSinceInception"),
     AVERAGE_ANNUAL_RETURN_INCEPTION_ONE("AverageAnnualReturnSinceInception1"),
     AVERAGE_ANNUAL_RETURN_INCEPTION_TWO("AverageAnnualReturnSinceInception2"),
+    AVERAGE_ANNUAL_RETURN_PERCENTAGE("AvgAnnlRtrPct"),
     ANNUAL_RETURN_YEAR_01("AnnualReturnYear01"),
     ANNUAL_RETURN_YEAR_05("AnnualReturnYear05"),
     ANNUAL_RETURN_YEAR_10("AnnualReturnYear10"),

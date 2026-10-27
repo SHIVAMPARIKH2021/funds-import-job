@@ -29,7 +29,8 @@ public class BenchmarkItemReader implements ItemReader<RawBenchmarkSource> {
             Tags.AVERAGE_ANNUAL_RETURN_INCEPTION_TWO.getTag(),
             Tags.ANNUAL_RETURN_YEAR_01.getTag(),
             Tags.ANNUAL_RETURN_YEAR_05.getTag(),
-            Tags.ANNUAL_RETURN_YEAR_10.getTag()
+            Tags.ANNUAL_RETURN_YEAR_10.getTag(),
+            Tags.AVERAGE_ANNUAL_RETURN_PERCENTAGE.getTag()
     );
 
     private static final List<String> EXCLUDED_TAGS = List.of(
