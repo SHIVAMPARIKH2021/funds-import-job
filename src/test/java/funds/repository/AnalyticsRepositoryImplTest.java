@@ -58,6 +58,7 @@ class AnalyticsRepositoryImplTest {
         String upsertQuarterFundAssociationSql = "INSERT INTO quarter_fund_association";
         String findUnresolvedBenchmarksFromTextFacts = "SELECT * FROM benchmark_master";
         String stageFilingBenchmarkSql = "";
+        String findSeriesWithActivePrimaryBenchmark = "SELECT series_id FROM fund_benchmark_association WHERE is_primary = TRUE";
         analyticsRepositoryImpl = new AnalyticsRepositoryImpl(
                 jdbcTemplate,
                 namedParameterJdbcTemplate,
@@ -75,7 +76,8 @@ class AnalyticsRepositoryImplTest {
                 upsertReportingQuarterSql,
                 upsertQuarterFundAssociationSql,
                 "text",
-                stageFilingBenchmarkSql);
+                stageFilingBenchmarkSql,
+                findSeriesWithActivePrimaryBenchmark);
     }
 
     @Test

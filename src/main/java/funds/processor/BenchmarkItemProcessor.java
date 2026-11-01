@@ -206,6 +206,9 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         benchmarkMaster.setUpdatedBy(this.executor);
         benchmarkMaster.setAccessionNumber(source.getAccessionNumber() != null ? source.getAccessionNumber().trim() : null);
 
+        log.info("Processed benchmark candidate: [{}] -> Provider: [{}], Type: [{}], Accession: [{}]",
+                cleaned, matchedProvider, matchedType, benchmarkMaster.getAccessionNumber());
+
         return benchmarkMaster;
     }
 

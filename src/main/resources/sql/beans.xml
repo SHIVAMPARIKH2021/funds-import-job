@@ -214,20 +214,25 @@
                 CURRENT_TIMESTAMP
             )
             ON CONFLICT (series_id, benchmark_id) DO UPDATE SET
-                benchmark_name   = COALESCE(EXCLUDED.benchmark_name, analytics.fund_benchmark_association.benchmark_name),
-                is_primary       = CASE
-                    -- If incoming record is fallback 0, do NOT mark primary if the fund already has a real primary benchmark
-                    WHEN EXCLUDED.benchmark_id = 0 AND EXISTS (
-                        SELECT 1 FROM analytics.fund_benchmark_association existing
-                        WHERE existing.series_id = EXCLUDED.series_id
-                          AND existing.benchmark_id <> 0
-                          AND existing.is_primary = TRUE
-                    ) THEN FALSE
-                    ELSE EXCLUDED.is_primary
-                END,
-                accession_number = EXCLUDED.accession_number,
-                updated_at       = CURRENT_TIMESTAMP
+            benchmark_name   = COALESCE(EXCLUDED.benchmark_name, analytics.fund_benchmark_association.benchmark_name),
+            is_primary       = EXCLUDED.is_primary,
+            accession_number = EXCLUDED.accession_number,
+            updated_at       = CURRENT_TIMESTAMP
             ]]></value>
+        </constructor-arg>
+    </bean>
+
+    <bean id="findSeriesWithActivePrimaryBenchmark" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                SELECT DISTINCT
+                series_id
+                FROM analytics.fund_benchmark_association
+                WHERE benchmark_id <> 0
+                  AND is_primary = TRUE;
+                ]]>
+            </value>
         </constructor-arg>
     </bean>
 

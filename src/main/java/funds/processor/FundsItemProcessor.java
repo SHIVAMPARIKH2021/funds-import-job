@@ -17,11 +17,7 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -38,6 +34,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
     private final AnalyticsRepository analyticsRepository;
     private final Map<Integer, Pattern> complianceRuleMap = new HashMap<>();
     private List<ComplianceRules> complianceRules = Collections.emptyList();
+    private Set<String> seriesWithPrimaryBenchmark = Collections.emptySet();
 
     // Grouped 1:N cache loaded once per step: accession_number -> List<BenchmarkMaster>
     private Map<String, List<BenchmarkMaster>> benchmarksByAccessionMap = Collections.emptyMap();
@@ -79,6 +76,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
         log.info("Initialized {} compliance rules and {} distinct accession benchmarks for step '{}'",
                 this.complianceRules.size(), this.benchmarksByAccessionMap.size(), stepExecution.getStepName());
+        this.seriesWithPrimaryBenchmark = analyticsRepository.findSeriesWithActivePrimaryBenchmark();
     }
 
     @Override
@@ -120,14 +118,17 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             log.debug("No benchmark disclosed for filing [{}] and series [{}]. Applying fallback domain values.",
                     item.getAccessionNumber(), item.getSeriesId());
 
+            String cleanSeriesId = item.getSeriesId().strip();
+            boolean markAsPrimary = !this.seriesWithPrimaryBenchmark.contains(cleanSeriesId);
+
             fund.setBenchmarkId(this.defaultBenchmarkId);
             fund.setBenchmarkName(DEFAULT_BENCHMARK_NAME);
 
             associations.add(new FundBenchmarkAssociation(
-                    item.getSeriesId(),
+                    cleanSeriesId,
                     this.defaultBenchmarkId,
                     DEFAULT_BENCHMARK_NAME,
-                    true,
+                    markAsPrimary,
                     item.getAccessionNumber()
             ));
         }
