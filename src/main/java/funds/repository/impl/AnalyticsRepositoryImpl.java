@@ -46,6 +46,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     private final String upsertQuarterFundAssociationSql;
     private final String findTextBenchmarkDisclosuresSql;
     private final String stageFilingBenchmarkSql;
+    private final String findSeriesWithActivePrimaryBenchmark;
 
 
     public AnalyticsRepositoryImpl(
@@ -65,7 +66,8 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
             @Qualifier("upsertReportingQuarterSql") String upsertReportingQuarterSql,
             @Qualifier("upsertQuarterFundAssociationSql") String upsertQuarterFundAssociationSql,
             @Qualifier("findTextBenchmarkDisclosuresSql") String findTextBenchmarkDisclosuresSql,
-            @Qualifier("stageFilingBenchmarkSql") String stageFilingBenchmarkSql) {
+            @Qualifier("stageFilingBenchmarkSql") String stageFilingBenchmarkSql,
+            @Qualifier("findSeriesWithActivePrimaryBenchmark") String findSeriesWithActivePrimaryBenchmark) {
 
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
@@ -82,6 +84,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.upsertQuarterFundAssociationSql = upsertQuarterFundAssociationSql;
         this.findTextBenchmarkDisclosuresSql = findTextBenchmarkDisclosuresSql;
         this.stageFilingBenchmarkSql = stageFilingBenchmarkSql;
+        this.findSeriesWithActivePrimaryBenchmark = findSeriesWithActivePrimaryBenchmark;
     }
 
     @Override
@@ -223,5 +226,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         return disclosures.stream()
                 .filter(d -> d.getSeriesId() != null)
                 .toList();
+    }
+
+    @Override
+    public Set<String> findSeriesWithActivePrimaryBenchmark() {
+        List<String> seriesList = jdbcTemplate.queryForList(findSeriesWithActivePrimaryBenchmark, String.class);
+        return new HashSet<>(seriesList);
     }
 }

@@ -5,6 +5,7 @@ import funds.model.*;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public interface AnalyticsRepository {
 
@@ -31,4 +32,6 @@ public interface AnalyticsRepository {
     void upsertQuarterFundAssociations(List<QuarterFundAssociation> associations);
 
     List<RawBenchmarkSource> findUnresolvedBenchmarksFromTextFacts(List<String> benchmarkTags, String accessionNumber);
+
+    Set<String> findSeriesWithActivePrimaryBenchmark();
 }
