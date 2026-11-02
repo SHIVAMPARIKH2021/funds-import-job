@@ -327,7 +327,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             Pattern wordPattern = Pattern.compile("\\b" + Pattern.quote(token) + "\\b");
             if (wordPattern.matcher(targetText).find()) {
                 matchedCount++;
-                if (token.matches("\\d+")) {
+                if (!hasDistinctiveNumber && token.matches("\\d+")) {
                     hasDistinctiveNumber = true;
                 }
             }
