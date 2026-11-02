@@ -77,7 +77,8 @@ class AnalyticsRepositoryImplTest {
                 upsertQuarterFundAssociationSql,
                 "text",
                 stageFilingBenchmarkSql,
-                findSeriesWithActivePrimaryBenchmark);
+                findSeriesWithActivePrimaryBenchmark,
+                "");
     }
 
     @Test
@@ -99,7 +100,8 @@ class AnalyticsRepositoryImplTest {
         doReturn(expected).when(namedParameterJdbcTemplate).query(eq(getRawFundData), any(SqlParameterSource.class), any(BeanPropertyRowMapper.class));
 
         List<RawFundSource> actual = analyticsRepositoryImpl.findRawFundsForQuarter(
-                Collections.singletonList("tag"), LocalDate.of(2024, 1, 1), LocalDate.of(2024, 3, 31));
+                Collections.singletonList("strategy_tag"),
+                Collections.singletonList("objective_tag"), LocalDate.of(2024, 1, 1), LocalDate.of(2024, 3, 31));
 
         assertNotNull(actual);
         assertEquals(1, actual.size());
@@ -148,7 +150,7 @@ class AnalyticsRepositoryImplTest {
 
     @Test
     void mapfindbenchmarksgroupedbyaccession() {
-        Map<String, List<BenchmarkMaster>> actual = analyticsRepositoryImpl.mapfindBenchmarksGroupedByAccession();
+        Map<String, List<BenchmarkMaster>> actual = analyticsRepositoryImpl.mapfindBenchmarksGroupedByAccessionAndSeries();
         assertNotNull(actual);
     }
 

@@ -20,9 +20,8 @@ class RawFundSourceTest {
         assertNull(source.getTicker());
         assertNull(source.getClassId());
         assertNull(source.getFundFamily());
-        assertNull(source.getDisclosureValue());
-        assertNull(source.getDisclosureTag());
-        assertNull(source.getAdditonalStrategyNarrative());
+        assertNull(source.getStrategyNarrative());
+        assertNull(source.getInvestmentObjective());
         assertNull(source.getBenchmarkName());
         assertNull(source.getFilingQuarter());
         assertNull(source.getFilingYear());
@@ -34,8 +33,7 @@ class RawFundSourceTest {
         RawFundSource source = new RawFundSource(
                 "TEST123", 1234567890, "ACC12345", LocalDate.of(2025, 1, 15),
                 "485APOS","TEST", "CLASS_A", "Test Family",
-                "Strategy narrative value", "STRATEGY_NARRATIVE_TEXT_BLOCK",
-                "Additional narrative", "S&P 500 Index", "Q1", 2025);
+                "Strategy narrative value", "STRATEGY_NARRATIVE_TEXT_BLOCK", "S&P 500 Index", "Q1", 2025);
 
         assertEquals("TEST123", source.getSeriesId());
         assertEquals(1234567890, source.getCik());
@@ -44,9 +42,8 @@ class RawFundSourceTest {
         assertEquals("TEST", source.getTicker());
         assertEquals("CLASS_A", source.getClassId());
         assertEquals("Test Family", source.getFundFamily());
-        assertEquals("Strategy narrative value", source.getDisclosureValue());
-        assertEquals("STRATEGY_NARRATIVE_TEXT_BLOCK", source.getDisclosureTag());
-        assertEquals("Additional narrative", source.getAdditonalStrategyNarrative());
+        assertEquals("Strategy narrative value", source.getStrategyNarrative());
+        assertEquals("STRATEGY_NARRATIVE_TEXT_BLOCK", source.getInvestmentObjective());
         assertEquals("S&P 500 Index", source.getBenchmarkName());
         assertEquals("Q1", source.getFilingQuarter());
         assertEquals(2025, source.getFilingYear());
@@ -63,9 +60,8 @@ class RawFundSourceTest {
         source.setTicker("TEST");
         source.setClassId("CLASS_A");
         source.setFundFamily("Test Family");
-        source.setDisclosureValue("Strategy narrative value");
-        source.setDisclosureTag("STRATEGY_NARRATIVE_TEXT_BLOCK");
-        source.setAdditonalStrategyNarrative("Additional narrative");
+        source.setStrategyNarrative("Strategy narrative value");
+        source.setInvestmentObjective("STRATEGY_NARRATIVE_TEXT_BLOCK");
         source.setBenchmarkName("S&P 500 Index");
         source.setFilingQuarter("Q1");
         source.setFilingYear(2025);
@@ -77,9 +73,8 @@ class RawFundSourceTest {
         assertEquals("TEST", source.getTicker());
         assertEquals("CLASS_A", source.getClassId());
         assertEquals("Test Family", source.getFundFamily());
-        assertEquals("Strategy narrative value", source.getDisclosureValue());
-        assertEquals("STRATEGY_NARRATIVE_TEXT_BLOCK", source.getDisclosureTag());
-        assertEquals("Additional narrative", source.getAdditonalStrategyNarrative());
+        assertEquals("Strategy narrative value", source.getStrategyNarrative());
+        assertEquals("STRATEGY_NARRATIVE_TEXT_BLOCK", source.getInvestmentObjective());
         assertEquals("S&P 500 Index", source.getBenchmarkName());
         assertEquals("Q1", source.getFilingQuarter());
         assertEquals(2025, source.getFilingYear());

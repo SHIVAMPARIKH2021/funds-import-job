@@ -11,5 +11,5 @@ public class BenchmarkMaster extends BaseModel {
     private String benchmarkType;
     private String benchmarkProvider;
     private String accessionNumber;
-
+    private String seriesId;
 }
