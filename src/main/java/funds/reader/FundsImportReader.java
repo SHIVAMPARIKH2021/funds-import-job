@@ -38,17 +38,19 @@ public class FundsImportReader implements ItemReader<RawFundSource> {
     @Override
     public RawFundSource read() throws Exception {
         if(fundIterator == null) {
-            // Fetch the fund data based on version and tag
-            List<String> tags = Arrays.asList(
+            final List<String> STRATEGY_TAGS = List.of(
                     Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag(),
-                    Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag(),
-                    Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag(),
                     Tags.INVESTMENT_STRATEGY_TEXT_BLOCK.getTag()
+            );
+
+            final List<String> OBJECTIVE_TAGS = List.of(
+                    Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag(),
+                    Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag()
             );
 
             Map<String, LocalDate> dateRangeMap = calculateQuarterDateRange(Integer.parseInt(year), Integer.parseInt(quarter));
             List<RawFundSource> funds = analyticsRepository
-                    .findRawFundsForQuarter(tags, dateRangeMap.get("minDate"), dateRangeMap.get("maxDate"))
+                    .findRawFundsForQuarter(STRATEGY_TAGS, OBJECTIVE_TAGS, dateRangeMap.get("minDate"), dateRangeMap.get("maxDate"))
                     .stream().distinct().toList();
             this.fundIterator = funds.iterator();
         }

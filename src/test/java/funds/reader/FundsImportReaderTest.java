@@ -41,7 +41,8 @@ class FundsImportReaderTest {
         expected.setSeriesId("TEST123");
         List<RawFundSource> funds = Collections.singletonList(expected);
         when(analyticsRepository.findRawFundsForQuarter(
-                eq(Collections.singletonList("tag")),
+                eq(Collections.singletonList("strategy_tag")),
+                eq(Collections.singletonList("objective_tag")),
                 eq(LocalDate.of(2024, 1, 1)),
                 eq(LocalDate.of(2024, 3, 31)))).thenReturn(funds);
 

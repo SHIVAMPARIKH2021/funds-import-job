@@ -4,72 +4,40 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans
            https://www.springframework.org/schema/beans/spring-beans.xsd">
 
-    <!-- ================================================================= -->
-    <!-- SELECT CLAUSES                                                    -->
-    <!-- ================================================================= -->
-    <bean id="selectRawFundSourceQuery" class="java.lang.String">
-        <constructor-arg>
-            <value>
-              select distinct
-                sub.adsh AS accessionNumber,
-                sub.filed as filingDate,
-                sub.cik,
-                sub.name as fundFamily,
-                sub.form AS formType,
-                ctm.symbol AS ticker,
-                ctm.class_id as classId,
-                td.series AS seriesId,
-                td.tag AS disclosureTag,
-                td.value AS disclosureValue,
-                td.footnote as additionalStrategyNarrative
-            </value>
-        </constructor-arg>
-    </bean>
 
-    <!-- ================================================================= -->
-    <!-- FROM CLAUSES                                                      -->
-    <!-- ================================================================= -->
-    <bean id="fromRawFundSourceQuery" class="java.lang.String">
-        <constructor-arg>
-            <value><![CDATA[
-              from
-                sec_financials.submissions sub
-              join sec_financials.text_disclosures td
-                on sub.adsh = td.adsh
-              join sec_financials.company_tickers_mf ctm
-                on ctm.series_id  = td.series
-                and ctm.is_active = true
-            ]]></value>
-        </constructor-arg>
-    </bean>
-
-    <!-- ================================================================= -->
-    <!-- WHERE CLAUSE BASE & FRAGMENTS                                    -->
-    <!-- ================================================================= -->
-    <bean id="whereClause" class="java.lang.String">
-        <constructor-arg>
-            <value><![CDATA[
-            where
-            td.tag IN(:tags)
-            AND sub.filed >= :minDate
-            AND sub.filed <= :maxDate
-         ]]></value>
-        </constructor-arg>
-    </bean>
-
-    <!-- ================================================================= -->
-    <!-- ORDER BY CLAUSE BASE & FRAGMENTS                                    -->
-    <!-- ================================================================= -->
-    <bean id="orderByClause" class="java.lang.String">
-        <constructor-arg>
-            <value><![CDATA[
-            ORDER BY td.series, td.tag;
-         ]]></value>
-        </constructor-arg>
-    </bean>
 
     <bean id="getRawFundData" class="java.lang.String">
-        <constructor-arg value="#{selectRawFundSourceQuery + ' ' + fromRawFundSourceQuery + ' ' + whereClause + ' ' + orderByClause}"/>
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                SELECT
+                sub.adsh AS accessionNumber,
+                sub.filed AS filingDate,
+                sub.cik,
+                sub.name AS fundFamily,
+                sub.form AS formType,
+                ctm.symbol AS ticker,
+                ctm.class_id AS classId,
+                td_obj.series AS seriesId,
+                td_strat.value AS strategyNarrative,
+                td_obj.value AS investmentObjective
+                FROM sec_financials.submissions sub
+                JOIN sec_financials.company_tickers_mf ctm
+                ON ctm.cik = sub.cik AND ctm.is_active = true
+                LEFT JOIN sec_financials.text_disclosures td_strat
+                ON td_strat.adsh = sub.adsh
+                AND td_strat.series = ctm.series_id
+                AND td_strat.tag IN (:strategyTags)
+                LEFT JOIN sec_financials.text_disclosures td_obj
+                ON td_obj.adsh = sub.adsh
+                AND td_obj.series = ctm.series_id
+                AND td_obj.tag IN (:objectiveTags)
+                WHERE sub.filed >= :minDate
+                AND sub.filed <= :maxDate
+                AND (td_strat.value IS NOT NULL OR td_obj.value IS NOT NULL)
+                ]]>
+            </value>
+        </constructor-arg>
     </bean>
 
     <!-- ================================================================= -->
@@ -106,19 +74,33 @@
         </constructor-arg>
     </bean>
 
+    <bean id="getBenchmarkProviders" class="java.lang.String">
+        <constructor-arg>
+            <value>
+                <![CDATA[
+                select
+                  distinct bpr.provider_name
+                from analytics.benchmark_provider_rules bpr;
+            ]]>
+            </value>
+        </constructor-arg>
+    </bean>
+
     <bean id="stageFilingBenchmarkSql" class="java.lang.String">
         <constructor-arg>
             <value><![CDATA[
-            INSERT INTO analytics.staged_filing_benchmark (
-                accession_number,
-                benchmark_id
-            )
-            SELECT
-                :accessionNumber,
-                bm.benchmark_id
-            FROM analytics.benchmark_master bm
-            WHERE bm.benchmark_name = :benchmarkName
-            ON CONFLICT (accession_number, benchmark_id) DO NOTHING
+        INSERT INTO analytics.staged_filing_benchmark (
+            accession_number,
+            series_id,
+            benchmark_id,
+            created_at
+        ) VALUES (
+            :accessionNumber,
+            :seriesId,
+            (SELECT benchmark_id FROM analytics.benchmark_master WHERE benchmark_name = :benchmarkName LIMIT 1),
+            CURRENT_TIMESTAMP
+        )
+        ON CONFLICT (accession_number, series_id, benchmark_id) DO NOTHING
         ]]></value>
         </constructor-arg>
     </bean>
@@ -345,18 +327,17 @@
 
     <bean id="findBenchmarksGroupedByAccession" class="java.lang.String">
         <constructor-arg>
-            <value>
-                <![CDATA[
-                SELECT
-                  sfb.accession_number AS accessionNumber,
-                  bm.benchmark_id AS benchmarkId,
-                  bm.benchmark_name AS benchmarkName,
-                  bm.benchmark_type AS benchmarkType
-                FROM analytics.staged_filing_benchmark sfb
-                JOIN analytics.benchmark_master bm
-                  ON bm.benchmark_id = sfb.benchmark_id;
-                ]]>
-            </value>
+            <value><![CDATA[
+        SELECT
+            sfb.accession_number AS accessionNumber,
+            sfb.series_id AS seriesId,
+            bm.benchmark_id AS benchmarkId,
+            bm.benchmark_name AS benchmarkName,
+            bm.benchmark_type AS benchmarkType
+        FROM analytics.staged_filing_benchmark sfb
+        JOIN analytics.benchmark_master bm
+          ON bm.benchmark_id = sfb.benchmark_id
+        ]]></value>
         </constructor-arg>
     </bean>
 

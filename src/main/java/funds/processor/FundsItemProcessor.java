@@ -16,6 +16,7 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.HtmlUtils;
 
 import java.util.*;
 import java.util.regex.Pattern;
@@ -30,26 +31,46 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     private final String executor;
     private final String dryRun;
+    private final String activeStrategyRegex;
+    private final String passiveStrategyRegex;
     private final int defaultBenchmarkId;
     private final AnalyticsRepository analyticsRepository;
     private final Map<Integer, Pattern> complianceRuleMap = new HashMap<>();
     private List<ComplianceRules> complianceRules = Collections.emptyList();
     private Set<String> seriesWithPrimaryBenchmark = Collections.emptySet();
+    // --- Pre-compiled Patterns for Primary Benchmark Scoring ---
+    private static final Pattern BENCHMARK_BOILERPLATE_PATTERN = Pattern.compile(
+            "(?i)\\s*[\\(\\[\\*]?\\s*(?:reflects?\\s+no\\s+deductions?|no\\s+deductions?|reflects?\\s+no\\s+fees?|gross\\s+of\\s+taxes?|net\\s+of\\s+taxes?).*"
+    );
+
+    private static final Pattern CLEAN_PUNCTUATION_PATTERN = Pattern.compile(
+            "[\\*\\,\\[\\]\\(\\)\\.\\/\\-\\—\\_\\\"\\']"
+    );
+
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
+
+    private static final Set<String> STOP_WORDS = Set.of(
+            "the", "of", "and", "in", "for", "to", "a", "an", "index", "total", "return", "fund", "series", "class", "trust"
+    );
 
     // Grouped 1:N cache loaded once per step: accession_number -> List<BenchmarkMaster>
-    private Map<String, List<BenchmarkMaster>> benchmarksByAccessionMap = Collections.emptyMap();
+    private Map<String, List<BenchmarkMaster>> benchmarksByAccessionAndSeriesMap = Collections.emptyMap();
 
     private Map<String, String> fundNamesByTagMap = Collections.emptyMap();
 
     public FundsItemProcessor(AnalyticsRepository analyticsRepository,
                               @Value("#{jobParameters['executor']}") String executor,
                               @Value("#{jobParameters['dryrun']}") String dryRun,
-                              @Value("${benchmark.default.id:0}") int defaultBenchmarkId
+                              @Value("${benchmark.default.id:0}") int defaultBenchmarkId,
+                              @Value("${fund.strategy.active.regex}") String activeStrategyRegex,
+                              @Value("${fund.strategy.passive.regex}") String passiveStrategyRegex
     ) {
         this.analyticsRepository = analyticsRepository;
         this.executor = executor;
         this.dryRun = dryRun;
         this.defaultBenchmarkId = defaultBenchmarkId;
+        this.activeStrategyRegex = activeStrategyRegex;
+        this.passiveStrategyRegex = passiveStrategyRegex;
     }
 
     @BeforeStep
@@ -68,14 +89,14 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         }
 
         // 2. Preload grouped benchmarks by accession number (O(1) memory lookup)
-        this.benchmarksByAccessionMap.clear();
-        this.benchmarksByAccessionMap = analyticsRepository.mapfindBenchmarksGroupedByAccession();
+        this.benchmarksByAccessionAndSeriesMap.clear();
+        this.benchmarksByAccessionAndSeriesMap = analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries();
 
         this.fundNamesByTagMap.clear();
         this.fundNamesByTagMap = analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
 
         log.info("Initialized {} compliance rules and {} distinct accession benchmarks for step '{}'",
-                this.complianceRules.size(), this.benchmarksByAccessionMap.size(), stepExecution.getStepName());
+                this.complianceRules.size(), this.benchmarksByAccessionAndSeriesMap.size(), stepExecution.getStepName());
         this.seriesWithPrimaryBenchmark = analyticsRepository.findSeriesWithActivePrimaryBenchmark();
     }
 
@@ -95,23 +116,18 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         List<FundBenchmarkAssociation> associations = new ArrayList<>();
 
         if (matchedBenchmarks != null && !matchedBenchmarks.isEmpty()) {
-            boolean isFirst = true;
+            BenchmarkMaster primaryBenchmark = selectPrimaryBenchmark(matchedBenchmarks,item, fund);
+            fund.setBenchmarkId(primaryBenchmark.getBenchmarkId());
+            fund.setBenchmarkName(primaryBenchmark.getBenchmarkName());
             for (BenchmarkMaster bm : matchedBenchmarks) {
-                // Set the first benchmark as primary on fund_master
-                if (isFirst) {
-                    fund.setBenchmarkId(bm.getBenchmarkId());
-                    fund.setBenchmarkName(bm.getBenchmarkName());
-                }
-
-                // Add to bridge associations
+                boolean isPrimary = bm.getBenchmarkId().equals(primaryBenchmark.getBenchmarkId());
                 associations.add(new FundBenchmarkAssociation(
-                        item.getSeriesId(),
+                        stripeSeries(item.getSeriesId()),
                         bm.getBenchmarkId(),
                         bm.getBenchmarkName(),
-                        isFirst,
-                        item.getAccessionNumber()
+                        isPrimary,
+                        stripeAccessionNumber(item.getAccessionNumber())
                 ));
-                isFirst = false;
             }
         } else {
             // Domain Fallback: newly incepted funds or filings without quantitative returns
@@ -138,11 +154,12 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     private FundMaster createBaseFundEntity(RawFundSource item) {
         FundMaster fund = new FundMaster();
+        String fundName = fetchFundName(item.getSeriesId(), item.getFundFamily());
         String cadence = resolveReportingCadence(item.getFormType());
-        String classifiedStrategy = evaluateStrategy(item.getDisclosureValue());
+        String classifiedStrategy = evaluateStrategy(fundName, item.getInvestmentObjective(), item.getStrategyNarrative());
         fund.setFundFamily(item.getFundFamily());
         // Use the fund name from the tag mapping if available; otherwise, fallback to the fund family
-        fund.setFundName(this.fundNamesByTagMap.getOrDefault(item.getSeriesId().strip(), item.getFundFamily()));
+        fund.setFundName(fundName);
         fund.setSeriesId(item.getSeriesId().strip());
         fund.setCik(item.getCik());
         fund.setAccessionNumber(item.getAccessionNumber());
@@ -153,35 +170,49 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         fund.setReportingCadence(cadence);
         fund.setHasDailyPricing(Boolean.TRUE);
         fund.setHasQuarterlyHoldings(Boolean.TRUE);
-        resolveStrategyNarrativeAndInvestmentObjective(item, fund);
+        fund.setInvestmentObjective(item.getInvestmentObjective());
+        fund.setStrategyNarrative(item.getStrategyNarrative());
         return fund;
     }
 
-    private void resolveStrategyNarrativeAndInvestmentObjective(RawFundSource item, FundMaster fund) {
-        if (item.getDisclosureTag().equalsIgnoreCase(
-                Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag())
-                || item.getDisclosureTag().equalsIgnoreCase(
-                Tags.INVESTMENT_STRATEGY_TEXT_BLOCK.getTag())) {
-            fund.setStrategyNarrative(item.getDisclosureValue());
-        } else if (item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag())
-                || item.getDisclosureTag().equalsIgnoreCase(Tags.OBJECTIVE_SECONDARY_TEXT_BLOCK.getTag())) {
-            fund.setInvestmentObjective(item.getDisclosureValue());
+    private String evaluateStrategy(String fundName, String objective, String narrative) {
+        var UNKNOWN_TYPE = "UNKNOWN";
+        var PROVIDER_KEYWORDS = List.of("s&p", "msci", "russell", "index", "nasdaq", "bloomberg", "ftse", "morningstar", "wilshire", "ice", "us government", "us treasury");
+        // 1. Tier 1: Fast Heuristic on Legal Fund Name
+        if (fundName != null && !fundName.isBlank()) {
+            String lowerName = fundName.toLowerCase();
+            boolean hasBenchmarkProviderKeyword = PROVIDER_KEYWORDS.stream().anyMatch(lowerName::contains);
+            if (lowerName.matches(this.passiveStrategyRegex)
+                    || hasBenchmarkProviderKeyword) {
+                return "PASSIVE";
+            }
+            if (lowerName.matches(this.activeStrategyRegex)) {
+                return "ACTIVE";
+            }
         }
-    }
 
-    private String evaluateStrategy(String narrative) {
-        String UNKNOWN_TYPE = "UNKNOWN";
-        if (StringUtil.isNullOrEmpty(narrative)) {
+        // 2. Tier 2: Combine Objective and Strategy Narrative
+        StringBuilder combinedText = new StringBuilder();
+        if (objective != null && !objective.isBlank()) {
+            combinedText.append(objective).append(" ");
+        }
+        if (narrative != null && !narrative.isBlank()) {
+            combinedText.append(narrative);
+        }
+
+        String fullText = combinedText.toString().trim();
+        if (fullText.isEmpty()) {
             return UNKNOWN_TYPE;
         }
 
-        for (ComplianceRules rule : complianceRules) {
+        // 3. Tier 3: Evaluate Dynamic Compliance Rules Engine
+        for (ComplianceRules rule : this.complianceRules) {
             boolean matches;
             if (Boolean.TRUE.equals(rule.getIsRegex())) {
-                Pattern pattern = complianceRuleMap.get(rule.getRuleId());
-                matches = pattern != null && pattern.matcher(narrative).find();
+                Pattern pattern = this.complianceRuleMap.get(rule.getRuleId());
+                matches = pattern != null && pattern.matcher(fullText).find();
             } else {
-                matches = narrative.toLowerCase().contains(rule.getPattern().toLowerCase());
+                matches = fullText.toLowerCase().contains(rule.getPattern().toLowerCase());
             }
 
             if (matches) {
@@ -193,10 +224,12 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
     }
 
     private List<BenchmarkMaster> resolveBenchmarksForFund(RawFundSource item) {
-        String accessionNumber = item.getAccessionNumber() != null ? item.getAccessionNumber().trim() : null;
+        String accessionNumber = stripeAccessionNumber(item.getAccessionNumber());
+        String series = stripeSeries(item.getSeriesId());
+        String compositeKey = accessionNumber + "_" + series;
 
         return accessionNumber != null
-                ? this.benchmarksByAccessionMap.getOrDefault(accessionNumber, Collections.emptyList())
+                ? this.benchmarksByAccessionAndSeriesMap.getOrDefault(compositeKey, Collections.emptyList())
                 : Collections.emptyList();
     }
 
@@ -212,4 +245,126 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         }
         return ANNUAL_CADENCE;
     }
+
+    /**
+     * Scoring Tie-Breaker method for benchmark selection
+     */
+    private BenchmarkMaster selectPrimaryBenchmark(List<BenchmarkMaster> candidates, RawFundSource item, FundMaster fund) {
+        if (candidates.size() == 1) {
+            return candidates.getFirst();
+        }
+
+        // Normalize text from both the item and the populated fund entity
+        String normObjective = normalizeText(fund.getInvestmentObjective());
+        String normFundName = normalizeText(fetchFundName(item.getSeriesId(), item.getFundFamily()));
+        String normNarrative = normalizeText(item.getStrategyNarrative());
+
+        BenchmarkMaster bestMatch = candidates.getFirst();
+        int highestScore = -1;
+
+        for (BenchmarkMaster bm : candidates) {
+            String rawBmName = bm.getBenchmarkName();
+            if (rawBmName == null || rawBmName.isBlank()) {
+                continue;
+            }
+
+            // Strip disclaimer boilerplate
+            String cleanBm = BENCHMARK_BOILERPLATE_PATTERN.matcher(rawBmName).replaceAll("");
+            String normBm = normalizeText(cleanBm);
+
+            if (normBm.length() < 3) {
+                normBm = normalizeText(rawBmName);
+            }
+
+            int objectiveScore = scoreCandidateMatch(normBm, normObjective) * 3; // Weight x3
+            int fundNameScore = scoreCandidateMatch(normBm, normFundName) * 2;   // Weight x2
+            int narrativeScore = scoreCandidateMatch(normBm, normNarrative);     // Weight x1
+
+            int totalScore = objectiveScore + fundNameScore + narrativeScore;
+
+            if (totalScore > highestScore) {
+                highestScore = totalScore;
+                bestMatch = bm;
+            }
+        }
+
+        return bestMatch;
+    }
+
+    private int scoreCandidateMatch(String normBm, String targetText) {
+        if (normBm.isBlank() || targetText.isBlank()) {
+            return 0;
+        }
+
+        // Tier 1: Exact full phrase match
+        if (targetText.contains(normBm)) {
+            return 100;
+        }
+
+        // Tier 2: Phrase match omitting the word "index"
+        String withoutIndex = normBm.replaceAll("\\bindex\\b", "").replaceAll("\\s+", " ").trim();
+        if (withoutIndex.length() >= 3 && targetText.contains(withoutIndex)) {
+            return 85;
+        }
+
+        // Tier 3: Token overlap
+        String[] tokens = normBm.split("\\s+");
+        List<String> keyTokens = new ArrayList<>();
+        for (String t : tokens) {
+            if (!STOP_WORDS.contains(t) && t.length() > 1) {
+                keyTokens.add(t);
+            }
+        }
+
+        if (keyTokens.isEmpty()) {
+            return 0;
+        }
+
+        int matchedCount = 0;
+        boolean hasDistinctiveNumber = false;
+
+        for (String token : keyTokens) {
+            Pattern wordPattern = Pattern.compile("\\b" + Pattern.quote(token) + "\\b");
+            if (wordPattern.matcher(targetText).find()) {
+                matchedCount++;
+                if (token.matches("\\d+")) {
+                    hasDistinctiveNumber = true;
+                }
+            }
+        }
+
+        double ratio = (double) matchedCount / keyTokens.size();
+        if (ratio >= 0.75) {
+            return (int) (60 * ratio) + (hasDistinctiveNumber ? 20 : 0);
+        } else if (ratio >= 0.50) {
+            return (int) (30 * ratio) + (hasDistinctiveNumber ? 15 : 0);
+        }
+
+        return 0;
+    }
+
+    private String normalizeText(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        // Unescape &amp;, &quot;, &#160; etc. using Spring's built-in utility
+        String unescaped = HtmlUtils.htmlUnescape(text.toLowerCase());
+        unescaped = unescaped.replaceAll("<[^>]+>", " ");
+        String stripped = CLEAN_PUNCTUATION_PATTERN.matcher(unescaped).replaceAll(" ");
+        return WHITESPACE_PATTERN.matcher(stripped).replaceAll(" ").trim();
+    }
+
+    private String stripeAccessionNumber(String accessionNumber) {
+        return accessionNumber != null ? accessionNumber.trim() : null;
+    }
+
+    private String stripeSeries(String seriesId) {
+        return seriesId != null ? seriesId.strip() : "";
+    }
+
+    private String fetchFundName(String series, String fundFamily) {
+        var strippedSeries = stripeSeries(series);
+        return this.fundNamesByTagMap.getOrDefault(strippedSeries, fundFamily);
+    }
+
 }

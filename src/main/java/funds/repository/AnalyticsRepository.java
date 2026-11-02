@@ -11,7 +11,7 @@ public interface AnalyticsRepository {
 
     List<ComplianceRules> findByIsActiveTrueOrderByPriorityAsc();
 
-    List<RawFundSource> findRawFundsForQuarter(List<String> tags, LocalDate minDate, LocalDate maxDate);
+    List<RawFundSource> findRawFundsForQuarter(List<String> strategyTags, List<String> objectiveTags, LocalDate minDate, LocalDate maxDate);
 
     List<RawBenchmarkSource> findAllBenchmarksByTags(List<String> includedTags, List<String> excludedTags);
 
@@ -19,7 +19,7 @@ public interface AnalyticsRepository {
 
     void saveAllBenchmarks(List<? extends BenchmarkMaster> benchmarks);
 
-    Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccession();
+    Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccessionAndSeries();
 
     Map<String, String> findFundNamesByTag(String tag);
 

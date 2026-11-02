@@ -47,6 +47,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     private final String findTextBenchmarkDisclosuresSql;
     private final String stageFilingBenchmarkSql;
     private final String findSeriesWithActivePrimaryBenchmark;
+    private final String getBenchmarkProviders;
 
 
     public AnalyticsRepositoryImpl(
@@ -67,7 +68,8 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
             @Qualifier("upsertQuarterFundAssociationSql") String upsertQuarterFundAssociationSql,
             @Qualifier("findTextBenchmarkDisclosuresSql") String findTextBenchmarkDisclosuresSql,
             @Qualifier("stageFilingBenchmarkSql") String stageFilingBenchmarkSql,
-            @Qualifier("findSeriesWithActivePrimaryBenchmark") String findSeriesWithActivePrimaryBenchmark) {
+            @Qualifier("findSeriesWithActivePrimaryBenchmark") String findSeriesWithActivePrimaryBenchmark,
+            @Qualifier("getBenchmarkProviders") String getBenchmarkProviders) {
 
         this.jdbcTemplate = jdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
@@ -85,6 +87,7 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         this.findTextBenchmarkDisclosuresSql = findTextBenchmarkDisclosuresSql;
         this.stageFilingBenchmarkSql = stageFilingBenchmarkSql;
         this.findSeriesWithActivePrimaryBenchmark = findSeriesWithActivePrimaryBenchmark;
+        this.getBenchmarkProviders = getBenchmarkProviders;
     }
 
     @Override
@@ -93,9 +96,11 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     }
 
     @Override
-    public List<RawFundSource> findRawFundsForQuarter(List<String> tags, LocalDate minDate, LocalDate maxDate) {
+    public List<RawFundSource> findRawFundsForQuarter(List<String> strategyTags, List<String> objectiveTags,
+                                                      LocalDate minDate, LocalDate maxDate) {
         MapSqlParameterSource MapSqlParameterSource = new MapSqlParameterSource()
-                .addValue("tags", tags)
+                .addValue("strategyTags", strategyTags)
+                .addValue("objectiveTags", objectiveTags)
                 .addValue("minDate", minDate)
                 .addValue("maxDate", maxDate);
         return namedParameterJdbcTemplate.query(getRawFundData, MapSqlParameterSource, new BeanPropertyRowMapper<>(RawFundSource.class));
@@ -141,18 +146,21 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
     }
 
     @Override
-    public Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccession() {
+    public Map<String, List<BenchmarkMaster>> mapfindBenchmarksGroupedByAccessionAndSeries() {
         Map<String, List<BenchmarkMaster>> map = new HashMap<>();
         namedParameterJdbcTemplate.query(findBenchmarksGroupedByAccession, rs -> {
             String accession = rs.getString("accessionNumber").trim();
+            String series = rs.getString("seriesId") != null ? rs.getString("seriesId").trim() : "";
 
             BenchmarkMaster bm = new BenchmarkMaster();
             bm.setAccessionNumber(accession);
+            bm.setSeriesId(series);
             bm.setBenchmarkId(rs.getObject("benchmarkId", Integer.class));
             bm.setBenchmarkName(rs.getString("benchmarkName"));
             bm.setBenchmarkType(rs.getString("benchmarkType"));
 
-            map.computeIfAbsent(accession, k -> new ArrayList<>()).add(bm);
+            String compositeKey = accession + "_" + series;
+            map.computeIfAbsent(compositeKey, k -> new ArrayList<>()).add(bm);
         });
         return map;
     }
@@ -233,4 +241,5 @@ public class AnalyticsRepositoryImpl implements AnalyticsRepository {
         List<String> seriesList = jdbcTemplate.queryForList(findSeriesWithActivePrimaryBenchmark, String.class);
         return new HashSet<>(seriesList);
     }
+
 }

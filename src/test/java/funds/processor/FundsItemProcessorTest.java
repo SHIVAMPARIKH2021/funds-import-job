@@ -101,7 +101,7 @@ class FundsItemProcessorTest {
 
         Map<String, String> fundNames = Collections.singletonMap("TEST123", "Test Fund");
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag())).thenReturn(fundNames);
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
 
         fundsItemProcessor.setup(mock(StepExecution.class));
 
@@ -127,7 +127,7 @@ class FundsItemProcessorTest {
         List<ComplianceRules> rules = Collections.singletonList(new ComplianceRules(
                 true, true, "other.*pattern", "ruleName", 1, 1, "OTHER_STRATEGY"));
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(rules);
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
                 .thenReturn(Collections.singletonMap("TEST123", "Test Fund"));
 
@@ -147,7 +147,7 @@ class FundsItemProcessorTest {
         item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
                 .thenReturn(Collections.singletonMap("TEST123", "Test Fund"));
 
@@ -168,7 +168,7 @@ class FundsItemProcessorTest {
         item.setDisclosureTag(Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag());
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
                 .thenReturn(Collections.singletonMap("TEST123", "Test Fund"));
 
@@ -198,7 +198,7 @@ class FundsItemProcessorTest {
         bm.setBenchmarkName("Benchmark1");
         bm.setBenchmarkType("Type1");
         benchmarksMap.put("ACC12345", Collections.singletonList(bm));
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(benchmarksMap);
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(benchmarksMap);
 
         fundsItemProcessor.setup(mock(StepExecution.class));
 
@@ -221,7 +221,7 @@ class FundsItemProcessorTest {
         item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
                 .thenReturn(Collections.singletonMap("TEST123", "Mapped Fund Name"));
 
@@ -252,7 +252,7 @@ class FundsItemProcessorTest {
         bm2.setBenchmarkId(2);
         bm2.setBenchmarkName("Benchmark2");
         benchmarksMap.put("ACC12345", Arrays.asList(bm1, bm2));
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(benchmarksMap);
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(benchmarksMap);
 
         fundsItemProcessor.setup(mock(StepExecution.class));
 
@@ -274,7 +274,7 @@ class FundsItemProcessorTest {
         item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
                 .thenReturn(Collections.emptyMap());
 
@@ -308,7 +308,7 @@ class FundsItemProcessorTest {
         item.setFundFamily("Test Family");
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
-        when(analyticsRepository.mapfindBenchmarksGroupedByAccession()).thenReturn(Collections.emptyMap());
+        when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
                 .thenReturn(Collections.singletonMap("TEST123", "Test Fund"));
 

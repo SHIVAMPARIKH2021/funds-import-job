@@ -22,7 +22,7 @@ class RawFundSourceTest {
         assertNull(source.getFundFamily());
         assertNull(source.getDisclosureValue());
         assertNull(source.getDisclosureTag());
-        assertNull(source.getAdditonalStrategyNarrative());
+        assertNull(source.getAdditionalStrategyNarrative());
         assertNull(source.getBenchmarkName());
         assertNull(source.getFilingQuarter());
         assertNull(source.getFilingYear());
@@ -46,7 +46,7 @@ class RawFundSourceTest {
         assertEquals("Test Family", source.getFundFamily());
         assertEquals("Strategy narrative value", source.getDisclosureValue());
         assertEquals("STRATEGY_NARRATIVE_TEXT_BLOCK", source.getDisclosureTag());
-        assertEquals("Additional narrative", source.getAdditonalStrategyNarrative());
+        assertEquals("Additional narrative", source.getAdditionalStrategyNarrative());
         assertEquals("S&P 500 Index", source.getBenchmarkName());
         assertEquals("Q1", source.getFilingQuarter());
         assertEquals(2025, source.getFilingYear());
@@ -65,7 +65,7 @@ class RawFundSourceTest {
         source.setFundFamily("Test Family");
         source.setDisclosureValue("Strategy narrative value");
         source.setDisclosureTag("STRATEGY_NARRATIVE_TEXT_BLOCK");
-        source.setAdditonalStrategyNarrative("Additional narrative");
+        source.setAdditionalStrategyNarrative("Additional narrative");
         source.setBenchmarkName("S&P 500 Index");
         source.setFilingQuarter("Q1");
         source.setFilingYear(2025);
@@ -79,7 +79,7 @@ class RawFundSourceTest {
         assertEquals("Test Family", source.getFundFamily());
         assertEquals("Strategy narrative value", source.getDisclosureValue());
         assertEquals("STRATEGY_NARRATIVE_TEXT_BLOCK", source.getDisclosureTag());
-        assertEquals("Additional narrative", source.getAdditonalStrategyNarrative());
+        assertEquals("Additional narrative", source.getAdditionalStrategyNarrative());
         assertEquals("S&P 500 Index", source.getBenchmarkName());
         assertEquals("Q1", source.getFilingQuarter());
         assertEquals(2025, source.getFilingYear());
