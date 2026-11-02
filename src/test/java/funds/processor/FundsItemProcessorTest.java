@@ -33,6 +33,8 @@ class FundsItemProcessorTest {
     private static final String DEFAULT_BENCHMARK_NAME = "Not Disclosed / New Inception";
     private static final String ACTIVE_REGEX = ".*(active|actives).*";
     private static final String PASSIVE_REGEX = ".*(passive|passives).*";
+    private static final String INDEX_REGEX = ".*(index|idx).*";
+    private static final String PROVIDER_REGEX = ".*(s&p|bloomberg).*";
 
     @Mock
     private AnalyticsRepository analyticsRepository;
@@ -48,7 +50,9 @@ class FundsItemProcessorTest {
                 "false",
                 DEFAULT_BENCHMARK_ID,
                 ACTIVE_REGEX,
-                PASSIVE_REGEX
+                PASSIVE_REGEX,
+                INDEX_REGEX,
+                PROVIDER_REGEX
         );
     }
 
@@ -82,7 +86,9 @@ class FundsItemProcessorTest {
                 "true",
                 DEFAULT_BENCHMARK_ID,
                 ACTIVE_REGEX,
-                PASSIVE_REGEX
+                PASSIVE_REGEX,
+                INDEX_REGEX,
+                PROVIDER_REGEX
         );
 
         RawFundSource item = new RawFundSource();

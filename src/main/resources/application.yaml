@@ -49,7 +49,14 @@ benchmark:
 fund:
   strategy:
     active:
-      regex: '.*\b(actively\s+managed|active\s+etf|active\s+fund)\b.*'
+      regex: '.*\b(active|actively managed|active etf|active fund|unconstrained|discretionary)\b.*'
 
     passive:
-      regex: '.*\b(index\s+fund|idx\s+fund|etf\s+index)\b.*'
+      regex: '.*\b(index fund|idx fund|index etf|idx etf|tracker|tracking|index portfolio)\b.*'
+
+  index:
+    regex: '(?i).*\b(index|idx)\b.*'
+
+  benchmark:
+    provider:
+      regex: '(?i).*\b(s&p|msci|russell|nasdaq|ftse|morningstar|wilshire|ice|bloomberg)\b.*'

@@ -33,6 +33,8 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
     private final String dryRun;
     private final String activeStrategyRegex;
     private final String passiveStrategyRegex;
+    private final String fundIndexRegex;
+    private final String fundBenchmarkProviderRegex;
     private final int defaultBenchmarkId;
     private final AnalyticsRepository analyticsRepository;
     private final Map<Integer, Pattern> complianceRuleMap = new HashMap<>();
@@ -44,7 +46,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
     );
 
     private static final Pattern CLEAN_PUNCTUATION_PATTERN = Pattern.compile(
-            "[\\*\\,\\[\\]\\(\\)\\.\\/\\-\\—\\_\\\"\\']"
+            "[*,\\[\\]()./\\-—_\"'%&]"
     );
 
     private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
@@ -63,7 +65,9 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
                               @Value("#{jobParameters['dryrun']}") String dryRun,
                               @Value("${benchmark.default.id:0}") int defaultBenchmarkId,
                               @Value("${fund.strategy.active.regex}") String activeStrategyRegex,
-                              @Value("${fund.strategy.passive.regex}") String passiveStrategyRegex
+                              @Value("${fund.strategy.passive.regex}") String passiveStrategyRegex,
+                              @Value("${fund.index.regex}") String fundIndexRegex,
+                              @Value("${fund.benchmark.provider.regex}") String fundBenchmarkProviderRegex
     ) {
         this.analyticsRepository = analyticsRepository;
         this.executor = executor;
@@ -71,6 +75,8 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         this.defaultBenchmarkId = defaultBenchmarkId;
         this.activeStrategyRegex = activeStrategyRegex;
         this.passiveStrategyRegex = passiveStrategyRegex;
+        this.fundIndexRegex = fundIndexRegex;
+        this.fundBenchmarkProviderRegex = fundBenchmarkProviderRegex;
     }
 
     @BeforeStep
@@ -149,6 +155,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             ));
         }
 
+        log.info("Fund Processed: series={}, accessionNumber={}", fund.getSeriesId(), fund.getAccessionNumber());
         return new FundImportPayload(fund, associations);
     }
 
@@ -177,17 +184,28 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     private String evaluateStrategy(String fundName, String objective, String narrative) {
         var UNKNOWN_TYPE = "UNKNOWN";
-        var PROVIDER_KEYWORDS = List.of("s&p", "msci", "russell", "index", "nasdaq", "bloomberg", "ftse", "morningstar", "wilshire", "ice", "us government", "us treasury");
+
         // 1. Tier 1: Fast Heuristic on Legal Fund Name
         if (fundName != null && !fundName.isBlank()) {
-            String lowerName = fundName.toLowerCase();
-            boolean hasBenchmarkProviderKeyword = PROVIDER_KEYWORDS.stream().anyMatch(lowerName::contains);
-            if (lowerName.matches(this.passiveStrategyRegex)
-                    || hasBenchmarkProviderKeyword) {
+            // Strip periods and unescape HTML/punctuation for consistent matching
+            String cleanName = fundName.replaceAll("\\.", "").toLowerCase().trim();
+
+            // Check 1A: Explicit Active branding takes immediate priority
+            // Handles cases like "JPMorgan Active Growth ETF" or "Active S&P ETF"
+            if (cleanName.matches(activeStrategyRegex)) {
+                return "ACTIVE";
+            }
+
+            // Check 1B: Explicit Index / Passive indicators in Name
+            if (cleanName.matches(this.passiveStrategyRegex)) {
                 return "PASSIVE";
             }
-            if (lowerName.matches(this.activeStrategyRegex)) {
-                return "ACTIVE";
+
+            boolean hasIndexMarker = cleanName.matches(this.fundIndexRegex);
+            boolean hasProvider = cleanName.matches(this.fundBenchmarkProviderRegex);
+
+            if (hasIndexMarker && hasProvider) {
+                return "PASSIVE";
             }
         }
 
@@ -205,7 +223,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             return UNKNOWN_TYPE;
         }
 
-        // 3. Tier 3: Evaluate Dynamic Compliance Rules Engine
+        // 3. Tier 3: Evaluate Dynamic Compliance Rules Engine (Negations -> Passive -> Active)[cite: 2]
         for (ComplianceRules rule : this.complianceRules) {
             boolean matches;
             if (Boolean.TRUE.equals(rule.getIsRegex())) {
