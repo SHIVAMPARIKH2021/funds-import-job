@@ -77,7 +77,8 @@ class AnalyticsRepositoryImplTest {
                 upsertQuarterFundAssociationSql,
                 "text",
                 stageFilingBenchmarkSql,
-                findSeriesWithActivePrimaryBenchmark);
+                findSeriesWithActivePrimaryBenchmark,
+                "");
     }
 
     @Test

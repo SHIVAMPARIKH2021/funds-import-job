@@ -31,6 +31,8 @@ class FundsItemProcessorTest {
 
     private static final int DEFAULT_BENCHMARK_ID = 0;
     private static final String DEFAULT_BENCHMARK_NAME = "Not Disclosed / New Inception";
+    private static final String ACTIVE_REGEX = ".*(active|actives).*";
+    private static final String PASSIVE_REGEX = ".*(passive|passives).*";
 
     @Mock
     private AnalyticsRepository analyticsRepository;
@@ -44,7 +46,9 @@ class FundsItemProcessorTest {
                 analyticsRepository,
                 "TEST",
                 "false",
-                DEFAULT_BENCHMARK_ID
+                DEFAULT_BENCHMARK_ID,
+                ACTIVE_REGEX,
+                PASSIVE_REGEX
         );
     }
 
@@ -76,12 +80,15 @@ class FundsItemProcessorTest {
                 analyticsRepository,
                 "TEST",
                 "true",
-                DEFAULT_BENCHMARK_ID
+                DEFAULT_BENCHMARK_ID,
+                ACTIVE_REGEX,
+                PASSIVE_REGEX
         );
 
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST");
-        item.setDisclosureValue("Test strategy");
+        item.setStrategyNarrative("Test strategy");
+        item.setInvestmentObjective("Test objective");
 
         FundImportPayload result = dryRunProcessor.process(item);
         assertNull(result);
@@ -92,8 +99,7 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("This fund has a value that matches the compliance rule");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setInvestmentObjective("This fund has a value that matches the compliance rule");
 
         List<ComplianceRules> rules = Collections.singletonList(new ComplianceRules(
                 true, true, "match.*rule", "ruleName", 1, 1, "TARGET_STRATEGY"));
@@ -121,8 +127,8 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("Unknown strategy value here");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setStrategyNarrative("Unknown strategy value here");
+        item.setInvestmentObjective("Unknown strategy value here");
 
         List<ComplianceRules> rules = Collections.singletonList(new ComplianceRules(
                 true, true, "other.*pattern", "ruleName", 1, 1, "OTHER_STRATEGY"));
@@ -143,8 +149,7 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("Our fund focuses on technology and innovation");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setStrategyNarrative("Our fund focuses on technology and innovation");
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
         when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
@@ -164,8 +169,7 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("Growth and capital appreciation");
-        item.setDisclosureTag(Tags.OBJECTIVE_PRIMARY_TEXT_BLOCK.getTag());
+        item.setInvestmentObjective("Growth and capital appreciation");
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
         when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
@@ -185,8 +189,7 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("Strategy narrative");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setStrategyNarrative("Strategy narrative");
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
@@ -197,7 +200,7 @@ class FundsItemProcessorTest {
         bm.setBenchmarkId(1);
         bm.setBenchmarkName("Benchmark1");
         bm.setBenchmarkType("Type1");
-        benchmarksMap.put("ACC12345", Collections.singletonList(bm));
+        benchmarksMap.put("ACC12345_TEST123", Collections.singletonList(bm));
         when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(benchmarksMap);
 
         fundsItemProcessor.setup(mock(StepExecution.class));
@@ -206,10 +209,10 @@ class FundsItemProcessorTest {
         assertNotNull(result);
         assertNotNull(result.getAssociations());
         assertEquals(1, result.getAssociations().size());
-        assertEquals("TEST123", result.getAssociations().get(0).getSeriesId());
-        assertEquals(1, result.getAssociations().get(0).getBenchmarkId());
+        assertEquals("TEST123", result.getAssociations().getFirst().getSeriesId());
+        assertEquals(1, result.getAssociations().getFirst().getBenchmarkId());
         assertEquals("Benchmark1", result.getFundMaster().getBenchmarkName());
-        assertTrue(result.getAssociations().get(0).getIsPrimary());
+        assertTrue(result.getAssociations().getFirst().getIsPrimary());
     }
 
     @Test
@@ -217,8 +220,7 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("Strategy narrative");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setStrategyNarrative("Strategy narrative");
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
         when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
@@ -237,8 +239,9 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("Strategy narrative");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setSeriesId("s000001");
+        item.setStrategyNarrative("Strategy narrative");
+        item.setInvestmentObjective("Investment Objective");
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
         when(analyticsRepository.findFundNamesByTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag()))
@@ -247,11 +250,13 @@ class FundsItemProcessorTest {
         Map<String, List<BenchmarkMaster>> benchmarksMap = new HashMap<>();
         BenchmarkMaster bm1 = new BenchmarkMaster();
         bm1.setBenchmarkId(1);
-        bm1.setBenchmarkName("Benchmark1");
+        bm1.setBenchmarkName("S&P 500 Index");
+        bm1.setSeriesId("s000001");
         BenchmarkMaster bm2 = new BenchmarkMaster();
         bm2.setBenchmarkId(2);
-        bm2.setBenchmarkName("Benchmark2");
-        benchmarksMap.put("ACC12345", Arrays.asList(bm1, bm2));
+        bm2.setBenchmarkName("unknown");
+        bm2.setSeriesId("s000001");
+        benchmarksMap.put("ACC12345_s000001", Arrays.asList(bm1, bm2));
         when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(benchmarksMap);
 
         fundsItemProcessor.setup(mock(StepExecution.class));
@@ -262,7 +267,7 @@ class FundsItemProcessorTest {
         assertEquals(true, result.getAssociations().get(0).getIsPrimary());
         assertEquals(false, result.getAssociations().get(1).getIsPrimary());
         assertEquals(1, result.getFundMaster().getBenchmarkId());
-        assertEquals("Benchmark1", result.getFundMaster().getBenchmarkName());
+        assertEquals("S&P 500 Index", result.getFundMaster().getBenchmarkName());
     }
 
     @Test
@@ -270,8 +275,7 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("NEW_INCEPTION_123");
         item.setAccessionNumber("ACC_NO_BENCHMARK");
-        item.setDisclosureValue("Strategy narrative");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setStrategyNarrative("Strategy narrative");
 
         when(analyticsRepository.findByIsActiveTrueOrderByPriorityAsc()).thenReturn(Collections.emptyList());
         when(analyticsRepository.mapfindBenchmarksGroupedByAccessionAndSeries()).thenReturn(Collections.emptyMap());
@@ -301,8 +305,7 @@ class FundsItemProcessorTest {
         RawFundSource item = new RawFundSource();
         item.setSeriesId("TEST123");
         item.setAccessionNumber("ACC12345");
-        item.setDisclosureValue("Strategy narrative");
-        item.setDisclosureTag(Tags.STRATEGY_NARRATIVE_TEXT_BLOCK.getTag());
+        item.setStrategyNarrative("Strategy narrative");
         item.setTicker("TEST");
         item.setCik(1234567890);
         item.setFundFamily("Test Family");

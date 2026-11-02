@@ -116,7 +116,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         List<FundBenchmarkAssociation> associations = new ArrayList<>();
 
         if (matchedBenchmarks != null && !matchedBenchmarks.isEmpty()) {
-            BenchmarkMaster primaryBenchmark = selectPrimaryBenchmark(matchedBenchmarks,item, fund);
+            BenchmarkMaster primaryBenchmark = selectPrimaryBenchmark(matchedBenchmarks, item, fund);
             fund.setBenchmarkId(primaryBenchmark.getBenchmarkId());
             fund.setBenchmarkName(primaryBenchmark.getBenchmarkName());
             for (BenchmarkMaster bm : matchedBenchmarks) {
