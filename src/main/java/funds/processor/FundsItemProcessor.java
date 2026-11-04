@@ -67,7 +67,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
                               @Value("${fund.strategy.active.regex}") String activeStrategyRegex,
                               @Value("${fund.strategy.passive.regex}") String passiveStrategyRegex,
                               @Value("${fund.index.regex}") String fundIndexRegex,
-                              @Value("${fund.benchmark.provider.regex}") String fundBenchmarkProviderRegex
+                              @Value("${benchmark.provider.regex}") String fundBenchmarkProviderRegex
     ) {
         this.analyticsRepository = analyticsRepository;
         this.executor = executor;
