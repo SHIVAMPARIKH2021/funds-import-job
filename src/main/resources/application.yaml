@@ -60,3 +60,4 @@ fund:
   benchmark:
     provider:
       regex: '(?i).*\b(s&p|msci|russell|nasdaq|ftse|morningstar|wilshire|ice|bloomberg)\b.*'
+      garbage-regex: '(?i)^[0-9.,%$ -]+$|^F\d{4,}$|after[\s-]?taxes?|return[\s-]?before[\s-]?taxes?|IndexNoDeduction|PerformanceTable|AverageAnnual'
