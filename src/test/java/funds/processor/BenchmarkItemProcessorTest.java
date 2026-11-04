@@ -35,6 +35,8 @@ class BenchmarkItemProcessorTest {
     private static final String DEFAULT_SUFFIX_REGEX = "(?i)(\\s*\\[Member\\]|Member)$";
     private static final String DEFAULT_TRANSITION_REGEX =
             "(?i)(?:index|benchmark)\\s+(?:has\\s+)?changed\\s+from\\s+.+?\\s+to\\s+(?:the\\s+)?(.+?)(?:\\s*,|\\s*\\(|\\s*\\.\\s*$)";
+    private static final String DEFAULT_BENCHMARK_GARBAGE_REGEX =
+            "(?i)^[0-9.,%$ -]+$|^F\\\\d{4,}$|after[\\\\s-]?taxes?|return[\\\\s-]?before[\\\\s-]?taxes?|IndexNoDeduction|PerformanceTable|AverageAnnual";
 
     @Mock
     private AnalyticsRepository analyticsRepository;
@@ -50,6 +52,7 @@ class BenchmarkItemProcessorTest {
                 DEFAULT_NARRATIVE_REGEX,
                 DEFAULT_SUFFIX_REGEX,
                 DEFAULT_TRANSITION_REGEX,
+                DEFAULT_BENCHMARK_GARBAGE_REGEX,
                 "TEST_EXECUTOR"
         );
     }
@@ -87,6 +90,7 @@ class BenchmarkItemProcessorTest {
                 DEFAULT_NARRATIVE_REGEX,
                 DEFAULT_SUFFIX_REGEX,
                 DEFAULT_TRANSITION_REGEX,
+                DEFAULT_BENCHMARK_GARBAGE_REGEX,
                 "TEST_EXECUTOR"
         );
 

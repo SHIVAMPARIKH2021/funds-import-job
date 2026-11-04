@@ -32,6 +32,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
     private final String benchmarkNarrativeRegex;
     private final String benchmarkSuffixRegex;
     private final String transitionRegex;
+    private final String benchmarkGarbageRegex;
     private final String executor;
     private final AnalyticsRepository analyticsRepository;
 
@@ -39,6 +40,8 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
     private Pattern suffixPattern;
     private Pattern benchmarkNarrativePattern;
     private Pattern transitionPattern;
+    // Numbers, dates, percentages (e.g. 1.81%, 5/28/2021), Internal SEC codes (e.g. F0001, F1519), 'after taxes', 'after-tax', 'return before taxes', Raw XBRL tag names
+    private Pattern benchmarkGarbagePattern;
     private List<BenchmarkCandidate> rules = Collections.emptyList();
     private final Map<Integer, Pattern> patternCache = new HashMap<>();
 
@@ -50,6 +53,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             // Strip terminal Member or [Member] variations in pure Java with regex
             @Value("${benchmark.suffix-regex}") String benchmarkSuffixRegex,
             @Value("${benchmark.transition-regex}") String transitionRegex,
+            @Value("${benchmark.provider.garbage-regex}") String benchmarkGarbageRegex,
             @Value("#{jobParameters['executor']}") String executor
     ) {
         this.analyticsRepository = analyticsRepository;
@@ -58,22 +62,26 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         this.benchmarkNarrativeRegex = benchmarkNarrativeRegex;
         this.transitionRegex = transitionRegex;
         this.benchmarkSuffixRegex = benchmarkSuffixRegex;
+        this.benchmarkGarbageRegex = benchmarkGarbageRegex;
     }
 
     @BeforeStep
     public void setup(StepExecution stepExecution) {
         try {
-            if (benchmarkRegex != null && !benchmarkRegex.isBlank()) {
+            if (StringUtil.notNullNorEmpty(benchmarkRegex)) {
                 this.boilerplatePattern = Pattern.compile(this.benchmarkRegex, Pattern.CASE_INSENSITIVE);
             }
-            if (benchmarkSuffixRegex != null && !benchmarkSuffixRegex.isBlank()) {
+            if (StringUtil.notNullNorEmpty(benchmarkSuffixRegex)) {
                 this.suffixPattern = Pattern.compile(this.benchmarkSuffixRegex, Pattern.CASE_INSENSITIVE);
             }
-            if (benchmarkNarrativeRegex != null && !benchmarkNarrativeRegex.isBlank()) {
+            if (StringUtil.notNullNorEmpty(benchmarkNarrativeRegex)) {
                 this.benchmarkNarrativePattern = Pattern.compile(this.benchmarkNarrativeRegex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
             }
-            if (transitionRegex != null && !transitionRegex.isBlank()) {
+            if (StringUtil.notNullNorEmpty(transitionRegex)) {
                 this.transitionPattern = Pattern.compile(this.transitionRegex, Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            }
+            if (StringUtil.notNullNorEmpty(benchmarkGarbageRegex)) {
+                this.benchmarkGarbagePattern = Pattern.compile(this.benchmarkGarbageRegex, Pattern.CASE_INSENSITIVE);
             }
         } catch (PatternSyntaxException pse) {
             log.error("Invalid regex syntax in benchmark configuration. Check application properties.", pse);
@@ -117,7 +125,8 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
 
             // Exclude non-benchmark internal fund adjustments
             String lower = rawCandidate.toLowerCase();
-            if (!lower.contains("aftertax") && !lower.contains("returnbeforetax")) {
+            boolean hasGarbageValue = benchmarkGarbagePattern.matcher(lower).find();
+            if (!StringUtil.isNullOrEmpty(lower) && !hasGarbageValue) {
                 // Strip trailing Member / [Member] using pre-compiled pattern
                 String stripped = stripSuffix(rawCandidate);
 
