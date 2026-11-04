@@ -53,7 +53,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
             // Strip terminal Member or [Member] variations in pure Java with regex
             @Value("${benchmark.suffix-regex}") String benchmarkSuffixRegex,
             @Value("${benchmark.transition-regex}") String transitionRegex,
-            @Value("${benchmark.provider.garbage-regex}") String benchmarkGarbageRegex,
+            @Value("${benchmark.garbage-regex}") String benchmarkGarbageRegex,
             @Value("#{jobParameters['executor']}") String executor
     ) {
         this.analyticsRepository = analyticsRepository;

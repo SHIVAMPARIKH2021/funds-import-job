@@ -29,6 +29,11 @@ benchmark:
   transition-regex: '(?i)(?:index|benchmark)\s+(?:has\s+)?changed\s+from\s+.+?\s+to\s+(?:the\s+)?(.+?)(?:\s*,|\s*\(|\s*\.\s*$)'
   regex: '(?i)\s*\((?:(?:(?:Index|the)\s+)?(?:returns?\s+)?(?:reflects?|do(?:es)?\s+not\s+reflect)|no\s+deductions?)\b[^)]*\)'
   suffix-regex: '(?i)(\s*\[Member\]|Member)$'
+  garbage-regex: '(?i)^[0-9.,%$ -]+$|^F\d{4,}$|after[\s-]?taxes?|return[\s-]?before[\s-]?taxes?|IndexNoDeduction|PerformanceTable|AverageAnnual'
+
+  provider:
+    regex: '(?i).*\b(s&p|msci|russell|nasdaq|ftse|morningstar|wilshire|ice|bloomberg)\b.*'
+
   narrative:
     regex: '(?:broad(?:-|\s+)based\s+(?:securities\s+)?market\s+index|broad\s+measure\s+of\s+market\s+performance|compare(?:d|s)?\s+(?:with|to)\s+(?:those\s+of\s+)?)(?:,\s*the|\s+the)?\s+([A-Z0-9][A-Za-z0-9&/.,\-\s]{3,70}?)(?:\s*\(reflects|\s*,?\s*which\s+reflects|(?:\.\s+|\.$)|\s*,\s*and\b|\s*\band\b)'
   default:
@@ -44,8 +49,3 @@ fund:
 
   index:
     regex: '(?i).*\b(index|idx)\b.*'
-
-  benchmark:
-    provider:
-      regex: '(?i).*\b(s&p|msci|russell|nasdaq|ftse|morningstar|wilshire|ice|bloomberg)\b.*'
-      garbage-regex: '(?i)^[0-9.,%$ -]+$|^F\d{4,}$|after[\s-]?taxes?|return[\s-]?before[\s-]?taxes?|IndexNoDeduction|PerformanceTable|AverageAnnual'
