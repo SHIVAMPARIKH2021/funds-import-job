@@ -29,7 +29,7 @@ benchmark:
   transition-regex: '(?i)(?:index|benchmark)\s+(?:has\s+)?changed\s+from\s+.+?\s+to\s+(?:the\s+)?(.+?)(?:\s*,|\s*\(|\s*\.\s*$)'
   regex: '(?i)\s*\((?:(?:(?:Index|the)\s+)?(?:returns?\s+)?(?:reflects?|do(?:es)?\s+not\s+reflect)|no\s+deductions?)\b[^)]*\)'
   suffix-regex: '(?i)(\s*\[Member\]|Member)$'
-  garbage-regex: '(?i)^[0-9.,%$ -]+$|^F\d{4,}$|after[\s-]?taxes?|return[\s-]?before[\s-]?taxes?|IndexNoDeduction|PerformanceTable|AverageAnnual'
+  garbage-regex: '(?i)(?:^[0-9.,%$* -]+$|^\d{1,2}/\d{1,2}/\d{2,4}$|^(?:19|20)\d{2}$|^\d{1,2}[\s-]*(?:years?|yrs?)$|^(?:since\s+inception|life\s+of\s+fund)$|^C\d{8,10}$|^(?:Index)?(?:[A-Z]{1,6}\d{1,5}|Index\d+)(?:Member)?$|^IX[A-Z0-9]{3,5}$|^[A-Z]{2,6}Index\d+$|after[\s-]?tax|before[\s-]?tax|return\s+(?:with|without)\s+a\s+sales\s+load|KavinGety|IndexNoDeduction|PerformanceTable|AverageAnnual|AvgAnnlRtr|fee\s+waiver|operating\s+expense|12b-1|management\s+fee|redemption\s+fee|^(?:maximum\s+|deferred\s+)?sales\s+charge|deferred\s+sales|^class\s+[a-z0-9]+$|^investor\s+class$|^institutional\s+(?:class|shares)$)'
 
   provider:
     regex: '(?i).*\b(s&p|msci|russell|nasdaq|ftse|morningstar|wilshire|ice|bloomberg)\b.*'
