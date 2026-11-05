@@ -1,13 +1,6 @@
 package funds.repository.impl;
 
-import funds.model.RawBenchmarkSource;
-import funds.model.BenchmarkCandidate;
-import funds.model.BenchmarkMaster;
-import funds.model.FundMaster;
-import funds.model.RawFundSource;
-import funds.model.ComplianceRules;
-import funds.model.FundBenchmarkAssociation;
-import funds.model.QuarterFundAssociation;
+import funds.model.*;
 import funds.repository.AnalyticsRepository;
 
 import org.springframework.beans.factory.annotation.Qualifier;

@@ -2,13 +2,9 @@ package funds.processor;
 
 import ch.qos.logback.core.util.StringUtil;
 import funds.constants.Tags;
-import funds.model.FundMaster;
-import funds.model.BenchmarkMaster;
-import funds.model.FundBenchmarkAssociation;
-import funds.model.RawFundSource;
-import funds.model.FundImportPayload;
-import funds.model.ComplianceRules;
+import funds.model.*;
 import funds.repository.AnalyticsRepository;
+import funds.service.BenchmarkResolverService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.annotation.BeforeStep;
@@ -60,6 +56,8 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     private Map<String, String> fundNamesByTagMap = Collections.emptyMap();
 
+    private final BenchmarkResolverService benchmarkResolverService;
+
     public FundsItemProcessor(AnalyticsRepository analyticsRepository,
                               @Value("#{jobParameters['executor']}") String executor,
                               @Value("#{jobParameters['dryrun']}") String dryRun,
@@ -67,7 +65,8 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
                               @Value("${fund.strategy.active.regex}") String activeStrategyRegex,
                               @Value("${fund.strategy.passive.regex}") String passiveStrategyRegex,
                               @Value("${fund.index.regex}") String fundIndexRegex,
-                              @Value("${benchmark.provider.regex}") String fundBenchmarkProviderRegex
+                              @Value("${benchmark.provider.regex}") String fundBenchmarkProviderRegex,
+                              BenchmarkResolverService benchmarkResolverService
     ) {
         this.analyticsRepository = analyticsRepository;
         this.executor = executor;
@@ -77,6 +76,7 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         this.passiveStrategyRegex = passiveStrategyRegex;
         this.fundIndexRegex = fundIndexRegex;
         this.fundBenchmarkProviderRegex = fundBenchmarkProviderRegex;
+        this.benchmarkResolverService = benchmarkResolverService;
     }
 
     @BeforeStep
@@ -122,7 +122,8 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         List<FundBenchmarkAssociation> associations = new ArrayList<>();
 
         if (matchedBenchmarks != null && !matchedBenchmarks.isEmpty()) {
-            BenchmarkMaster primaryBenchmark = selectPrimaryBenchmark(matchedBenchmarks, item, fund);
+            var fundName = fetchFundName(item.getSeriesId(), item.getFundFamily());
+            BenchmarkMaster primaryBenchmark = this.benchmarkResolverService.selectPrimaryBenchmark(matchedBenchmarks, item, fund, fundName);
             fund.setBenchmarkId(primaryBenchmark.getBenchmarkId());
             fund.setBenchmarkName(primaryBenchmark.getBenchmarkName());
             for (BenchmarkMaster bm : matchedBenchmarks) {
@@ -184,6 +185,8 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     private String evaluateStrategy(String fundName, String objective, String narrative) {
         var UNKNOWN_TYPE = "UNKNOWN";
+        var ACTIVE_TYPE = "ACTIVE";
+        var PASSIVE_TYPE = "PASSIVE";
 
         // 1. Tier 1: Fast Heuristic on Legal Fund Name
         if (fundName != null && !fundName.isBlank()) {
@@ -193,19 +196,19 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             // Check 1A: Explicit Active branding takes immediate priority
             // Handles cases like "JPMorgan Active Growth ETF" or "Active S&P ETF"
             if (cleanName.matches(activeStrategyRegex)) {
-                return "ACTIVE";
+                return ACTIVE_TYPE;
             }
 
             // Check 1B: Explicit Index / Passive indicators in Name
             if (cleanName.matches(this.passiveStrategyRegex)) {
-                return "PASSIVE";
+                return PASSIVE_TYPE;
             }
 
             boolean hasIndexMarker = cleanName.matches(this.fundIndexRegex);
             boolean hasProvider = cleanName.matches(this.fundBenchmarkProviderRegex);
 
             if (hasIndexMarker && hasProvider) {
-                return "PASSIVE";
+                return PASSIVE_TYPE;
             }
         }
 
@@ -238,6 +241,19 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
             }
         }
 
+        // 4. Tier 3: Pre-emptive Affirmative Active ETF Declaration Fallback
+        // Matches "The Fund is an actively managed..." while strictly excluding risk disclosures
+        if (narrative != null) {
+            String lowerNarrative = narrative.toLowerCase();
+            boolean isAffirmativeActive = lowerNarrative.matches("(?s).*\\bthe\\s+fund\\s+is\\s+an\\s+actively[\\s-]managed\\b.*");
+            boolean isRiskBoilerplate = lowerNarrative.contains("in comparison to actively managed")
+                    || lowerNarrative.contains("unlike actively managed");
+
+            if (isAffirmativeActive && !isRiskBoilerplate) {
+                return ACTIVE_TYPE;
+            }
+        }
+
         return UNKNOWN_TYPE;
     }
 
@@ -264,113 +280,9 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
         return ANNUAL_CADENCE;
     }
 
-    /**
-     * Scoring Tie-Breaker method for benchmark selection
-     */
-    private BenchmarkMaster selectPrimaryBenchmark(List<BenchmarkMaster> candidates, RawFundSource item, FundMaster fund) {
-        if (candidates.size() == 1) {
-            return candidates.getFirst();
-        }
 
-        // Normalize text from both the item and the populated fund entity
-        String normObjective = normalizeText(fund.getInvestmentObjective());
-        String normFundName = normalizeText(fetchFundName(item.getSeriesId(), item.getFundFamily()));
-        String normNarrative = normalizeText(item.getStrategyNarrative());
 
-        BenchmarkMaster bestMatch = candidates.getFirst();
-        int highestScore = -1;
 
-        for (BenchmarkMaster bm : candidates) {
-            String rawBmName = bm.getBenchmarkName();
-            if (rawBmName == null || rawBmName.isBlank()) {
-                continue;
-            }
-
-            // Strip disclaimer boilerplate
-            String cleanBm = BENCHMARK_BOILERPLATE_PATTERN.matcher(rawBmName).replaceAll("");
-            String normBm = normalizeText(cleanBm);
-
-            if (normBm.length() < 3) {
-                normBm = normalizeText(rawBmName);
-            }
-
-            int objectiveScore = scoreCandidateMatch(normBm, normObjective) * 3; // Weight x3
-            int fundNameScore = scoreCandidateMatch(normBm, normFundName) * 2;   // Weight x2
-            int narrativeScore = scoreCandidateMatch(normBm, normNarrative);     // Weight x1
-
-            int totalScore = objectiveScore + fundNameScore + narrativeScore;
-
-            if (totalScore > highestScore) {
-                highestScore = totalScore;
-                bestMatch = bm;
-            }
-        }
-
-        return bestMatch;
-    }
-
-    private int scoreCandidateMatch(String normBm, String targetText) {
-        if (normBm.isBlank() || targetText.isBlank()) {
-            return 0;
-        }
-
-        // Tier 1: Exact full phrase match
-        if (targetText.contains(normBm)) {
-            return 100;
-        }
-
-        // Tier 2: Phrase match omitting the word "index"
-        String withoutIndex = normBm.replaceAll("\\bindex\\b", "").replaceAll("\\s+", " ").trim();
-        if (withoutIndex.length() >= 3 && targetText.contains(withoutIndex)) {
-            return 85;
-        }
-
-        // Tier 3: Token overlap
-        String[] tokens = normBm.split("\\s+");
-        List<String> keyTokens = new ArrayList<>();
-        for (String t : tokens) {
-            if (!STOP_WORDS.contains(t) && t.length() > 1) {
-                keyTokens.add(t);
-            }
-        }
-
-        if (keyTokens.isEmpty()) {
-            return 0;
-        }
-
-        int matchedCount = 0;
-        boolean hasDistinctiveNumber = false;
-
-        for (String token : keyTokens) {
-            Pattern wordPattern = Pattern.compile("\\b" + Pattern.quote(token) + "\\b");
-            if (wordPattern.matcher(targetText).find()) {
-                matchedCount++;
-                if (!hasDistinctiveNumber && token.matches("\\d+")) {
-                    hasDistinctiveNumber = true;
-                }
-            }
-        }
-
-        double ratio = (double) matchedCount / keyTokens.size();
-        if (ratio >= 0.75) {
-            return (int) (60 * ratio) + (hasDistinctiveNumber ? 20 : 0);
-        } else if (ratio >= 0.50) {
-            return (int) (30 * ratio) + (hasDistinctiveNumber ? 15 : 0);
-        }
-
-        return 0;
-    }
-
-    private String normalizeText(String text) {
-        if (text == null || text.isBlank()) {
-            return "";
-        }
-        // Unescape &amp;, &quot;, &#160; etc. using Spring's built-in utility
-        String unescaped = HtmlUtils.htmlUnescape(text.toLowerCase());
-        unescaped = unescaped.replaceAll("<[^>]+>", " ");
-        String stripped = CLEAN_PUNCTUATION_PATTERN.matcher(unescaped).replaceAll(" ");
-        return WHITESPACE_PATTERN.matcher(stripped).replaceAll(" ").trim();
-    }
 
     private String stripeAccessionNumber(String accessionNumber) {
         return accessionNumber != null ? accessionNumber.trim() : null;
@@ -382,7 +294,34 @@ public class FundsItemProcessor implements ItemProcessor<RawFundSource, FundImpo
 
     private String fetchFundName(String series, String fundFamily) {
         var strippedSeries = stripeSeries(series);
-        return this.fundNamesByTagMap.getOrDefault(strippedSeries, fundFamily);
+        var rawName = this.fundNamesByTagMap.getOrDefault(strippedSeries, fundFamily);
+
+        if (rawName == null || rawName.isBlank()) {
+            return fundFamily;
+        }
+
+        rawName = rawName.strip();
+        String lowerName = rawName.toLowerCase();
+
+        // 1. Case-insensitive taxonomy check and series ID detection
+        boolean hasMemberTag = lowerName.contains("[member]");
+        boolean hasSeriesCode = StringUtil.notNullNorEmpty(strippedSeries) && rawName.contains(strippedSeries);
+
+        if (hasMemberTag || hasSeriesCode) {
+            // Strip [Member] case-insensitively and remove the raw series ID
+            String cleaned = rawName
+                    .replaceAll("(?i)\\[member\\]", "")
+                    .replace(strippedSeries, "")
+                    .strip();
+
+            // 2. Strip dangling delimiters left behind (e.g., "- Fund Name" or ": Fund Name")
+            cleaned = cleaned.replaceAll("^[-—:;\\s]+", "").trim();
+
+            // 3. If removing taxonomy codes leaves an empty string, fallback to fundFamily
+            return cleaned.isBlank() ? fundFamily : cleaned;
+        }
+
+        return rawName;
     }
 
 }
