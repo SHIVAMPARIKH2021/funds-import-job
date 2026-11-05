@@ -123,17 +123,16 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         if (candidateOpt.isPresent()) {
             String rawCandidate = candidateOpt.get();
 
-            // Exclude non-benchmark internal fund adjustments
-            String lower = rawCandidate.toLowerCase();
-            boolean hasGarbageValue = benchmarkGarbagePattern.matcher(lower).find();
-            if (!StringUtil.isNullOrEmpty(lower) && !hasGarbageValue) {
-                // Strip trailing Member / [Member] using pre-compiled pattern
-                String stripped = stripSuffix(rawCandidate);
+            // Strip trailing Member / [Member] using pre-compiled pattern
+            String stripped = stripSuffix(rawCandidate);
 
-                // Clean boilerplate text using pre-compiled pattern
-                String candCleaned = this.boilerplatePattern != null
-                        ? this.boilerplatePattern.matcher(stripped).replaceAll("").trim()
-                        : stripped;
+            // Clean boilerplate text using pre-compiled pattern
+            String candCleaned = this.boilerplatePattern != null
+                    ? this.boilerplatePattern.matcher(stripped).replaceAll("").trim()
+                    : stripped;
+
+            // Exclude non-benchmark internal fund adjustments
+            if (!isGarbageValue(candCleaned)) {
 
                 if (!candCleaned.isBlank()) {
                     cleaned = candCleaned;
@@ -142,7 +141,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         }
 
         // 2. Fallback to Text Disclosures ONLY IF numeric facts yielded no benchmark
-        if (cleaned == null || cleaned.isBlank()) {
+        if (StringUtil.isNullOrEmpty(cleaned)) {
             List<RawBenchmarkSource> textDisclosureSources = analyticsRepository.findUnresolvedBenchmarksFromTextFacts(
                     List.of(Tags.MARKET_INDEX_PERFORMANCE_COLUMN_HEADING.getTag(),
                             Tags.INDEX_NO_DEDUCTION_FOR_FEES_EXPENSES_TAXES.getTag(),
@@ -179,7 +178,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
                                     || lower.startsWith("the information")
                                     || lower.contains("table heading");
 
-                            if (!candCleaned.isBlank() && candCleaned.length() <= 100 && !isGenericBoilerplate) {
+                            if (!candCleaned.isBlank() && candCleaned.length() <= 100 && !isGenericBoilerplate && !isGarbageValue(candCleaned)) {
                                 cleaned = candCleaned;
                                 break; // Stop only when a genuine index title has been resolved
                             }
@@ -190,7 +189,7 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         }
 
         // If neither numeric facts nor text disclosures yielded a benchmark name, skip
-        if (cleaned == null || cleaned.isBlank()) {
+        if (StringUtil.isNullOrEmpty(cleaned) || isGarbageValue(cleaned)) {
             return null;
         }
 
@@ -285,7 +284,10 @@ public class BenchmarkItemProcessor implements ItemProcessor<RawBenchmarkSource,
         return null;
     }
 
-
-
-
+    private boolean isGarbageValue(String value) {
+        if (StringUtil.isNullOrEmpty(value)) {
+            return true;
+        }
+        return this.benchmarkGarbagePattern != null && benchmarkGarbagePattern.matcher(value.toLowerCase()).find();
+    }
 }
