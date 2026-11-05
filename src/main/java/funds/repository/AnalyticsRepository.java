@@ -23,6 +23,8 @@ public interface AnalyticsRepository {
 
     Map<String, String> findFundNamesByTag(String tag);
 
+//    List<RawFundNameCandidate> findFundNamesByTag(String tag);
+
     void saveAllFunds(List<? extends FundMaster> items);
 
     void upsertFundBenchmarkAssociations(List<FundBenchmarkAssociation> associations);

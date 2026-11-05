@@ -11,30 +11,31 @@
             <value>
                 <![CDATA[
                 SELECT
-                sub.adsh AS accessionNumber,
-                sub.filed AS filingDate,
-                sub.cik,
-                sub.name AS fundFamily,
-                sub.form AS formType,
-                ctm.symbol AS ticker,
-                ctm.class_id AS classId,
-                td_obj.series AS seriesId,
-                td_strat.value AS strategyNarrative,
-                td_obj.value AS investmentObjective
+                  sub.adsh AS accessionNumber,
+                  sub.filed AS filingDate,
+                  sub.cik,
+                  sub.name AS fundFamily,
+                  sub.form AS formType,
+                  ctm.symbol AS ticker,
+                  ctm.class_id AS classId,
+                  ctm.series_id AS seriesId,
+                  td_strat.value AS strategyNarrative,
+                  td_obj.value AS investmentObjective
                 FROM sec_financials.submissions sub
-                JOIN sec_financials.company_tickers_mf ctm
-                ON ctm.cik = sub.cik AND ctm.is_active = true
+                  JOIN sec_financials.company_tickers_mf ctm
+                  ON ctm.cik = sub.cik
+                  AND ctm.is_active = true
                 LEFT JOIN sec_financials.text_disclosures td_strat
-                ON td_strat.adsh = sub.adsh
-                AND td_strat.series = ctm.series_id
-                AND td_strat.tag IN (:strategyTags)
+                  ON td_strat.adsh = sub.adsh
+                  AND td_strat.series = ctm.series_id
+                  AND td_strat.tag IN (:strategyTags)
                 LEFT JOIN sec_financials.text_disclosures td_obj
-                ON td_obj.adsh = sub.adsh
-                AND td_obj.series = ctm.series_id
-                AND td_obj.tag IN (:objectiveTags)
+                  ON td_obj.adsh = sub.adsh
+                  AND td_obj.series = ctm.series_id
+                  AND td_obj.tag IN (:objectiveTags)
                 WHERE sub.filed >= :minDate
-                AND sub.filed <= :maxDate
-                AND (td_strat.value IS NOT NULL OR td_obj.value IS NOT NULL)
+                  AND sub.filed <= :maxDate
+                  AND (td_strat.value IS NOT NULL OR td_obj.value IS NOT NULL)
                 ]]>
             </value>
         </constructor-arg>
@@ -398,21 +399,27 @@
         <constructor-arg>
             <value>
                 <![CDATA[
-                SELECT DISTINCT
-                    td.series AS seriesId,
-                    COALESCE(
-                        NULLIF(TRIM(pl.terse), ''),
-                        NULLIF(TRIM(pl.std), ''),
-                        NULLIF(TRIM(pl.verbose), '')
-                    ) AS fundName
-                FROM sec_financials.text_disclosures td
-                JOIN sec_financials.presentation_labels pl
-                  ON td.adsh = pl.adsh
-                 AND pl.tag LIKE CONCAT('%', td.series, '%')
-                WHERE td.tag = :tag
-                  AND td.series IS NOT NULL
-                  AND COALESCE(pl.terse, pl.std, pl.verbose) IS NOT NULL;
-                ]]>
+            SELECT DISTINCT ON (td.series)
+                td.series AS seriesId,
+                COALESCE(
+                    NULLIF(TRIM(pl.terse), ''),
+                    NULLIF(TRIM(pl.std), ''),
+                    NULLIF(TRIM(pl.verbose), '')
+                ) AS fundName
+            FROM sec_financials.text_disclosures td
+            JOIN sec_financials.presentation_labels pl
+              ON td.adsh = pl.adsh
+             -- Fast, index-friendly join: strictly matches the series member tag
+             AND (
+                 pl.tag = CONCAT(td.series, 'Member')
+                 OR pl.tag = CONCAT('dei_', td.series, 'Member')
+                 OR pl.tag LIKE CONCAT('%_', td.series, 'Member')
+             )
+            WHERE td.tag = :tag
+              AND td.series IS NOT NULL
+              AND COALESCE(pl.terse, pl.std, pl.verbose) IS NOT NULL
+            ORDER BY td.series;
+            ]]>
             </value>
         </constructor-arg>
     </bean>

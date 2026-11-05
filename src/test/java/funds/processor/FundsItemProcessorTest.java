@@ -8,6 +8,7 @@ import funds.model.FundImportPayload;
 import funds.model.FundMaster;
 import funds.model.RawFundSource;
 import funds.repository.AnalyticsRepository;
+import funds.service.BenchmarkResolverService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -52,7 +53,8 @@ class FundsItemProcessorTest {
                 ACTIVE_REGEX,
                 PASSIVE_REGEX,
                 INDEX_REGEX,
-                PROVIDER_REGEX
+                PROVIDER_REGEX,
+                new BenchmarkResolverService()
         );
     }
 
@@ -88,7 +90,8 @@ class FundsItemProcessorTest {
                 ACTIVE_REGEX,
                 PASSIVE_REGEX,
                 INDEX_REGEX,
-                PROVIDER_REGEX
+                PROVIDER_REGEX,
+                new BenchmarkResolverService()
         );
 
         RawFundSource item = new RawFundSource();
